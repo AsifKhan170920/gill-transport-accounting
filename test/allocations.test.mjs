@@ -20,11 +20,11 @@ function seed(ctx) {
       customers: [{ id: 100, name: 'ABC Customer', balance: 0 }],
       suppliers: [{ id: 200, name: 'Supplier ABC', balance: 0 }],
       salesInv: [
-        { id: 11, uuid: 'iv-1', reference: 'INV-001', issueDate: '2026-09-01', dueDate: '2026-09-15',
+        { id: 11, uuid: 'iv-1', reference: 'INV-001', issueDate: '2026-09-01', dueDate: '2099-09-15',
           customer: 'ABC Customer', subtotal: 50000, tax: 0, total: 50000, balanceDue: 50000, lines: [] },
-        { id: 12, uuid: 'iv-2', reference: 'INV-002', issueDate: '2026-09-03', dueDate: '2026-09-20',
+        { id: 12, uuid: 'iv-2', reference: 'INV-002', issueDate: '2026-09-03', dueDate: '2099-09-20',
           customer: 'ABC Customer', subtotal: 25000, tax: 0, total: 25000, balanceDue: 25000, lines: [] },
-        { id: 13, uuid: 'iv-3', reference: 'INV-003', issueDate: '2026-09-05', dueDate: '2026-09-25',
+        { id: 13, uuid: 'iv-3', reference: 'INV-003', issueDate: '2026-09-05', dueDate: '2099-09-25',
           customer: 'Other Customer', subtotal: 15000, tax: 0, total: 15000, balanceDue: 15000, lines: [] },
       ],
       purchInv: [
