@@ -110,3 +110,15 @@ table.tx-ln{border-collapse:collapse;width:auto}
   #txHost input[type=date]{width:100% !important}
   .tx-actions .tf-engine{margin-left:0;flex-basis:100%}
 }
+
+/* totals box under the line grid (FIX_SPEC 86): never clipped by the grid's horizontal scroll */
+.tf-under{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:2px 0 10px}
+.tf-totals{margin-left:auto;min-width:280px;display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.tf-tr{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:3px 0}
+.tf-tr .tf-tl{color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;text-align:right}
+.tf-tr .tf-tv{min-width:110px;text-align:right;display:inline-flex;justify-content:flex-end}
+.tf-tr.grand{font-weight:700;border-top:1px solid var(--line);padding-top:6px}
+.tf-tr input.n{width:110px;text-align:right}
+.tf-tr select{width:auto}
+.tx-ln .act button[title="Duplicate line"]{font-size:13px}
+.cb-panel.cb-up{box-shadow:0 -8px 24px rgba(16,24,40,.12)}

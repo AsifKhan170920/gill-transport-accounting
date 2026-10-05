@@ -339,6 +339,9 @@
     var r = sel.getBoundingClientRect();
     el.style.left = Math.max(8, Math.min(r.left, (global.innerWidth||1024) - el.offsetWidth - 8)) + 'px';
     el.style.top = (r.bottom + 4) + 'px';
+    /* near the bottom of the screen the panel opens upward (flip) */
+    var vh = global.innerHeight || 768;
+    if(vh - r.bottom < 280 && r.top > vh - r.bottom){ el.style.top = ''; el.style.bottom = (vh - r.top + 4) + 'px'; el.classList.add('qc-pop-up'); }
     el.style.minWidth = Math.max(r.width, 220) + 'px';
 
     pop = { el:el, sel:sel, input:el.querySelector('.qc-pop-search'), list:el.querySelector('.qc-pop-list'), items:[], idx:-1 };
