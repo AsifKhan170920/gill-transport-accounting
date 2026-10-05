@@ -254,8 +254,8 @@ const App = {
     /* one nav row — same click target and badge as before, new chrome */
     const item=(label,icoHtml,active,extra)=>{
       const n=extra&&extra.key ? (rec[extra.key]||[]).length : null;
-      const badge = n===null ? '' : '<span class="side-badge'+(n===0?' zero':'')+'">'+n.toLocaleString('en-US')+'</span>';
-      return '<div class="side-item'+(active?' active':'')+'" role="button" tabindex="0"'+
+      const badge = n===null ? '' : '<span class="side-badge'+(n===0?' zero':'')+'" data-side-count="'+esc(extra.key)+'">'+n.toLocaleString('en-US')+'</span>';
+      return '<div class="side-item'+(active?' active':'')+'" role="button" tabindex="0" title="'+esc(label)+'" data-side="'+esc(label)+'"'+
         ' onclick="App.selectSection(\''+label.replace(/'/g,"\\'")+'\')"'+
         ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'+
         icoHtml+'<span class="side-label">'+esc(label)+'</span>'+badge+'</div>';
@@ -263,6 +263,8 @@ const App = {
 
     /* The rail is nav only: the business name moved to the toolbar and Create New
        is gone, so the list starts at the very top of the sidebar. */
+    /* the highlighted tab follows the page's origin (js/ledger-nav.js), not just wsSection */
+    const act=(typeof this.sideActive==='function')?this.sideActive():this.wsSection;
     let html='<div class="side-scroll">';
 
     /* grouped sections; anything a group forgot still shows, under "More" */
@@ -275,15 +277,15 @@ const App = {
       if(!rows.length) return;
       html+='<div class="side-group">'+esc(g[0])+'</div>';
       rows.forEach(l=>{ const r=byLabel[l];
-        html+=item(l,SI(l),this.wsSection===l,{key:r[2]}); });
+        html+=item(l,SI(l),act===l,{key:r[2]}); });
     });
     const leftovers=SIDEBAR.filter(r=>!placed[r[1]] && !this.isHidden(b,r[1]));
     if(leftovers.length){ html+='<div class="side-group">More</div>';
-      leftovers.forEach(r=>{ html+=item(r[1],SI(r[1]),this.wsSection===r[1],{key:r[2]}); }); }
+      leftovers.forEach(r=>{ html+=item(r[1],SI(r[1]),act===r[1],{key:r[2]}); }); }
 
     /* reports + settings */
     html+='<div class="side-sep"></div>';
-    SIDEBAR_FOOT.forEach(([ico,label])=>{ if(this.isHidden(b,label)) return; html+=item(label,SI(label),this.wsSection===label,null); });
+    SIDEBAR_FOOT.forEach(([ico,label])=>{ if(this.isHidden(b,label)) return; html+=item(label,SI(label),act===label,null); });
 
     const nHid=this.hiddenSections(b).length;
     html+='<div class="side-customize'+(this.wsMode==='customize'?' on':'')+'" role="button" tabindex="0"'+
