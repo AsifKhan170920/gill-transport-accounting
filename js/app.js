@@ -219,7 +219,7 @@ const App = {
     if(!list.length){ wrap.innerHTML='<div class="empty"><div class="big">No matches</div>No businesses match “'+this.esc(q)+'”.</div>'; document.getElementById('bizCount').textContent=''; return; }
     const rows=list.map(b=>'<tr><td class="col-chk"><input type="checkbox" class="biz-chk" value="'+b.id+'" onchange="App.onChkChange()"></td>'+
       '<td><a class="biz-link" onclick="App.openBusiness('+b.id+')">'+this.esc(b.name)+'</a></td>'+
-      '<td>'+this.esc(b.country||'Automatic')+'</td><td>'+new Date(b.created).toLocaleDateString()+'</td></tr>').join('');
+      '<td>'+this.esc(b.country||'Automatic')+'</td><td>'+this.fmtDateUS(new Date(b.created||0).toISOString().slice(0,10))+'</td></tr>').join('');
     wrap.innerHTML='<table class="tbl"><thead><tr><th class="col-chk"></th><th>Business Name</th><th>Country</th><th>Created</th></tr></thead><tbody>'+rows+'</tbody></table>';
     document.getElementById('bizCount').textContent=list.length+' of '+total+' business'+(total>1?'es':'');
   },
@@ -1332,7 +1332,7 @@ const App = {
     let recipientName='',recipientAddr='',fields=[],descText='',body='',status='',vcf='';
     if(isCash){ const isRcpt=key==='receipts'; recipientName=SHOW(key,'recipient')?(isRcpt?(rec.paidBy||''):(rec.payee||'')):'';
       fields=[]; if(SHOW(key,'date')) fields.push({l:'DATE',t:fmt(rec.date)}); if(rec.reference&&SHOW(key,'reference')) fields.push({l:'REFERENCE',t:e(rec.reference)});
-      if(SHOW(key,'bankacct')) fields.push({l:isRcpt?'RECEIVED IN':'PAID FROM',t:e(isRcpt?(rec.receivedIn||''):(rec.paidFrom||''))});
+      if(SHOW(key,'bankacct')) fields.push({l:isRcpt?'RECEIVED IN':'PAID FROM',t:e(this.dispAcct?this.dispAcct(isRcpt?(rec.receivedIn||''):(rec.paidFrom||'')):(isRcpt?(rec.receivedIn||''):(rec.paidFrom||'')))});
       ((this.formCfg(b,key)||{}).custom||[]).filter(x=>x.label&&x.show!==false).forEach(x=>fields.push({l:String(x.label).toUpperCase(),t:e(x.value||'')}));
       descText=SHOW(key,'description')?(rec.description||''):''; const lns=rec.lines||[]; let amt=0; lns.forEach(l=>amt+=this.parseNum(l.amount)||0);
       const cellFor={account:l=>e(acctName(b,l.account)||''),sub:l=>e(l.sub||''),desc:l=>e(l.desc||''),amount:l=>this.money(l.amount)};
@@ -2938,7 +2938,7 @@ const App = {
     return this.setCard('Base Currency',inner,'App.saveCurrency()'); },
   saveCurrency(){ const b=this.curBiz(); if(!b) return; b.baseCurrency=document.getElementById('cur_sel').value; this.saveBiz(b); this.settingsBack(); },
 
-  set_format(b){ const f=b.fmt||{date:'MM/DD/YYYY',sep:'comma-dot',decimals:2};
+  set_format(b){ const f=b.fmt||{date:'DD/MM/YYYY',sep:'comma-dot',decimals:2};
     const dOpt=[['MM/DD/YYYY','05/31/2025'],['DD/MM/YYYY','31/05/2025'],['YYYY-MM-DD','2025-05-31'],['D MMM YYYY','31 May 2025']].map(o=>'<option value="'+o[0]+'"'+(f.date===o[0]?' selected':'')+'>'+o[0]+'  ('+o[1]+')</option>').join('');
     const sOpt=[['comma-dot','1,234,567.89'],['dot-comma','1.234.567,89'],['space-comma','1\u00A0234\u00A0567,89'],['none-dot','1234567.89']].map(o=>'<option value="'+o[0]+'"'+(f.sep===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
     const decOpt=[0,2,3].map(o=>'<option value="'+o+'"'+((+f.decimals)===o?' selected':'')+'>'+o+'</option>').join('');

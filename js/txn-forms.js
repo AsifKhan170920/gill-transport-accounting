@@ -119,7 +119,7 @@
     if(cls==='claimPayer'){ var ps=(b.claimPayers||[]).map(function(x){ return (x&&x.name)||x; });
       var all=ps.concat(namesOf(b,'employees'),namesOf(b,'capital')); return uniq(all).map(function(n){ return {v:n,l:n}; }); }
     var S=SUBS[cls]; return S && S.list ? (((b.records||{})[S.list])||[]).filter(function(r){ return r&&r.name; })
-      .map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name }; }) : [];
+      .map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }) : [];
   }
   function uniq(a){ var s={}, o=[]; a.forEach(function(x){ if(x && !s[x]){ s[x]=1; o.push(x); } }); return o; }
 
@@ -330,11 +330,11 @@
   function acctOpts(b){ var A=app(); var L=[]; try{ L=A.accountOptions(b); }catch(e){}
     return L.filter(function(o){ var n=acctById(b,o.id); return !(n && n.cashControl); }).map(function(o){ return { v:o.id, l:o.label }; }); }
   function bankOpts(b,cur){ return (((b.records||{}).bankCash)||[]).filter(function(r){ return r && r.name && (!r.inactive || r.name===cur); })
-    .map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name }; }); }
-  function partyOpts(b,list){ return (((b.records||{})[list])||[]).filter(function(r){ return r && r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name }; }); }
+    .map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }); }
+  function partyOpts(b,list){ return (((b.records||{})[list])||[]).filter(function(r){ return r && r.name; }).map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }); }
   function itemOpts(b){ var R=b.records||{};
-    return ((R.inventory||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name, g:'Inventory item' }; }))
-      .concat((R.nonInvItems||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name, g:'Non-inventory item' }; })); }
+    return ((R.inventory||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)), g:'Inventory item' }; }))
+      .concat((R.nonInvItems||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)), g:'Non-inventory item' }; })); }
   function itemRec(b,name){ var R=b.records||{}; var i=(R.inventory||[]).filter(function(r){ return r&&r.name===name; })[0]; if(i) return { typ:'inv', rec:i };
     var n=(R.nonInvItems||[]).filter(function(r){ return r&&r.name===name; })[0]; return n ? { typ:'non', rec:n } : null; }
 
