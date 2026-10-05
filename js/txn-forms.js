@@ -195,7 +195,8 @@
     /* options: stored on the record; new documents take Settings > Form Defaults, then the source's defaults */
     var fd=((b&&b.formDefaults)||{})[key]||{}; var fo=fd.options||{};
     OPT_KEYS.forEach(function(k){ if(rec[k]!=null) t[k]=rec[k]; else if(fo[k]!=null) t[k]=fo[k]; });
-    var lines=(rec.lines||[]).filter(function(ln){ return ln && !ln.rounding; });
+    /* a legacy record with a header amount but no stored lines opens with one line carrying that amount */
+    var lines=(((A&&A._linesForEdit)?A._linesForEdit(key,rec):rec.lines)||[]).filter(function(ln){ return ln && !ln.rounding; });
     var designed=lines.some(function(ln){ return ln.amountNoTax!=null && blank(ln.taxCode); });
     if(mode==='new' && rec.colLineNum==null && fo.colLineNum==null) t.colLineNum=inv;
     if(t.colItem==null) t.colItem=true;
@@ -221,6 +222,8 @@
                price:price==null?'':price, discount:ln.discount==null?'':String(ln.discount), taxCode:code, division:ln.division||'' };
     });
     if(!t.lines.length) t.lines=[blankLine(t)];
+    /* data safety: the record has a total but its lines did not load — saving would set it to 0 */
+    if(mode==='edit' && A && A.recordHeaderTotal){ var ht=A.recordHeaderTotal(key,rec); if(Math.abs(ht)>0.005 && Math.abs(totals(b,t).total)<0.005) t.loadBlocked='Line items did not load \u2014 saving would set the amount to 0.'; }
     /* a clone must not re-apply the original's allocations; Receive payment's prefill asks to keep them */
     t.allocations=(mode==='edit' || rec._keepAlloc) ? (rec.allocations||[]).slice() : [];
     return t;
@@ -526,12 +529,12 @@
   }
   function actionsHtml(b,t){
     var A=app(), lbl=key2label()[t.key], can=function(fn){ return A && typeof A[fn]==='function' ? !!A[fn](b,lbl) : true; };
-    var h='<div class="form-actions tx-actions">';
+    var h=(t.loadBlocked?'<div class="tf-errbox data-guard" role="alert">'+esc(t.loadBlocked)+'</div>':'')+'<div class="form-actions tx-actions">';
     if(t.mode!=='edit'){
       h+='<button type="button" class="btn btn-primary tx-save" onclick="TxnForms.save(\'create\')">Create</button>'+
          '<button type="button" class="btn tx-save2" onclick="TxnForms.save(\'another\')">Create &amp; add another</button>';
     } else {
-      if(can('canEdit')) h+='<button type="button" class="btn btn-primary tx-save" onclick="TxnForms.save(\'update\')">Update</button>';
+      if(can('canEdit')) h+=(t.loadBlocked?'<button type="button" class="btn btn-primary tx-save" disabled title="'+esc(t.loadBlocked)+'">Update</button>':'<button type="button" class="btn btn-primary tx-save" onclick="TxnForms.save(\'update\')">Update</button>');
       if(can('canCreate')) h+='<button type="button" class="btn" onclick="TxnForms.cloneDoc()">Clone</button>';
       if(t.key==='salesInv' && KEY2('receipts') && can2('canCreate','receipts')) h+='<button type="button" class="btn" onclick="TxnForms.receivePayment()">Receive payment</button>';
       if(can('canDelete')) h+='<button type="button" class="btn btn-danger" onclick="TxnForms.del()">Delete</button>';
@@ -588,9 +591,16 @@
     host.querySelectorAll('tr.taxr').forEach(function(tr){ var k=tr.getAttribute('data-taxr'); var c=tr.children[1]; if(c) c.textContent=money(T.taxes[k]||0); });
     var df=host.querySelector('#txDiff'); if(df){ df.innerHTML='<span class="'+(T.diff?'tf-neg':'')+'">'+money(T.diff)+'</span>'; }
   }
-  function setParty(v){ TX.party=v||''; var b=cur();
+  function setParty(v){ TX.party=v||''; var b=cur(); defaultCtrlLine(b);
     TX.lines.forEach(function(l){ var cls=subClassOf(b,l.account); if(blank(l.sub) && ((cls==='customers'&&TX.partyType==='customer')||(cls==='suppliers'&&TX.partyType==='supplier'))) l.sub=TX.party; });
     draw(); }
+  /** Receipt from a customer / payment to a supplier: an empty line defaults to Accounts receivable / payable for that party. */
+  function defaultCtrlLine(b){ if(!TX || isInv(TX) || !b) return; var pt=TX.partyType; if(pt!=='customer'&&pt!=='supplier') return;
+    var ctl=null; try{ ctl=G('GL').sysAcct(b, pt==='customer'?'accounts receivable':'accounts payable', true); }catch(e){} if(!ctl) return;
+    var used=TX.lines.filter(function(l){ return !blank(l.account); });
+    if(used.length && used.some(function(l){ return l.account!==ctl.id; })) return;   // the user already chose other accounts
+    var l=TX.lines.filter(function(x){ return blank(x.account) || x.account===ctl.id; })[0]; if(!l) return;
+    l.account=ctl.id; l.sub=TX.party||''; l.taxCode=''; }
   function pickCustomer(v){ TX.customer=v||''; var b=cur(), c=partyRec(b,'customers',v);
     if(c){ var addr=String(c.address||'').trim(), trn=String(c.trn||'').trim(); var comp=addr+(trn?(addr?'\n\n':'')+'TRN: '+trn:'');
       if(comp) TX.billingAddress=comp;
@@ -724,7 +734,7 @@
     _opt:function(k,on){ if(!TX) return; TX[k]=!!on; if(k==='rounding' && on && !TX.roundMode) TX.roundMode='Round to nearest'; draw();
       var h=host(), n=h && h.querySelector && h.querySelector('[data-opt="'+k+'"]'); if(n) try{ n.focus(); }catch(e){} },
     _refAuto:function(on){ var b=cur(); TX.autoRef=!!on; if(on) TX.reference=nextRef(b,TX.key); draw(); var r=host()&&host().querySelector('[data-k="reference"]'); if(r && !on) focusEl(r); },
-    _partyType:function(v){ TX.partyType=v; TX.party=''; draw(); },
+    _partyType:function(v){ TX.partyType=v; TX.party=''; defaultCtrlLine(cur()); draw(); },
     _cbOpen:function(id,btn){ cbOpen(id,btn,''); },
     _cbPick:function(e,id,v){ if(e){ e.stopPropagation(); e.preventDefault && e.preventDefault(); } cbClose(); var c=CB[id]; if(c) c.pick(v); },
     _addLine:function(){ addLine(); },
@@ -744,7 +754,7 @@
       var perm=editing ? 'canEdit' : 'canCreate';
       if(typeof A[perm]==='function'){ if(!A[perm](b,lbl)){ alert('Your permissions do not allow '+(editing?'changing':'creating')+' '+SPEC[key].singular.toLowerCase()+'s.'); return null; } }
       else if(A.guardWrite && !A.guardWrite(b)) return null;
-      var E=validate(b,TX);
+      var E=validate(b,TX); if(editing && TX.loadBlocked) E.unshift(TX.loadBlocked);
       if(!isInv(TX) && isMounted()){ try{ var bad=Allocations.validate(); if(bad) E.push(bad); else TX.allocations=Allocations.collect(); }catch(e){} }
       var box=byId('txErr');
       if(E.length){ if(box){ box.innerHTML='<div class="tf-errbox" role="alert">'+E.map(esc).join('<br>')+'</div>'; try{ box.scrollIntoView({block:'center'}); }catch(e){} } return { errors:E }; }
