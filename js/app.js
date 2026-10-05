@@ -2746,7 +2746,8 @@ const App = {
       var undo = e.synthetic ? '<span style="color:#c8c8c8;font-size:11px">—</span>'
         : (e.undone ? '<span style="color:#aaa;font-size:11px">undone</span>'
           : '<button class="btn btn-xs" onclick="App.historyUndo(\''+e.id+'\')">Undo</button>');
-      var desc = (e.action==='update'&&e.before) ? ('<span style="text-decoration:line-through;color:#b0b0b0">'+self.esc(self._recLabel(e.key,e.before))+'</span><br>'+self.esc(e.label)) : self.esc(e.label);
+      var desc = self.esc(e.label);
+      if(e.action==='update'&&e.before&&e.after){ var ch=self._histChanges(e.key,e.before,e.after); if(ch.length) desc+='<div class="hist-chg">'+ch.slice(0,3).map(function(c){ return '<b>'+self.esc(c.label)+'</b>: <span class="hist-old">'+self.esc(self._histVal(c.old))+'</span><span class="hist-arrow">→</span><span class="hist-new">'+self.esc(self._histVal(c.new))+'</span>'; }).join(' · ')+(ch.length>3?' · +'+(ch.length-3)+' more':'')+'</div>'; }
       return '<tr'+(e.undone?' style="opacity:.5"':'')+'>'+
         '<td class="act"><button class="btn btn-xs" onclick="App.historyView(\''+(e.id||(e.key+':'+e.recId))+'\')">View</button></td>'+
         '<td style="white-space:nowrap">'+self.esc(self._fmtTs(e.ts))+'</td>'+
@@ -2769,6 +2770,24 @@ const App = {
   historyBack(){ if(this.histReturn){ this.histReturn=false; this.histEntry=null; this.openTool('history'); return true; } return false; },
   historyUndoFromView(){ var e=this.histEntry; if(!e||e.synthetic||e.undone||!e.id) return; this.historyUndo(e.id); this.histReturn=false; this.histEntry=null; this.openTool('history'); },
   _humanKey(k){ return String(k).replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_]+/g,' ').replace(/^./,function(c){ return c.toUpperCase(); }); },
+  /* History: what a stored key is called on the form ("Customer", not "Cust Name") */
+  _HIST_LABELS:{ custName:'Customer', supName:'Supplier', empName:'Employee', custTRN:'Customer TRN', supTRN:'Supplier TRN', custAddress:'Billing address', supAddress:'Supplier address',
+    custEmail:'Email', supEmail:'Email', empEmail:'Email', custMobile:'Phone', supMobile:'Phone', custCode:'Code', supCode:'Code', empCode:'Code', empAddress:'Address', custBalance:'Starting balance', supBalance:'Starting balance', empBalance:'Starting balance',
+    narration:'Narration', amounts_in_word:'Amount in words', bank_accounts_detail:'Bank details', bankDetails:'Bank details', issueDate:'Date', date:'Date', dueDate:'Due date', dueDateManual:'Due date', dueDays:'Due in days', dueType:'Due date type',
+    receivedIn:'Received in', paidFrom:'Paid from', paidBy:'Paid by', paidByType:'Paid by (type)', payee:'Payee', payeeType:'Payee (type)', bankName:'Name', bankCode:'Code', bankIBAN:'IBAN', ibanNo:'IBAN', iban:'IBAN', hasIban:'International Bank Account Number (IBAN)', bankAcctNo:'Account number',
+    itemName:'Name', itemCode:'Code', itemUnit:'Unit name', itemSellPrice:'Sales price', itemPurchPrice:'Purchase price', itemQty:'Starting quantity', itemOpeningCost:'Starting cost', faName:'Name', faCode:'Code', faCost:'Acquisition cost', faDate:'Acquisition date', faDepRate:'Depreciation rate', faAccDep:'Accumulated depreciation',
+    capName:'Name', capCode:'Code', capDesc:'Description', capBalance:'Starting balance', balanceDue:'Balance due', subtotal:'Subtotal', tax:'Tax', total:'Total', amount:'Amount', reference:'Reference', description:'Description', withholdingAmt:'Withholding amount', roundingAmt:'Rounding amount', amountPaid:'Amount paid',
+    colLineNum:'Column — Line number', colItem:'Column — Item', showDescCol:'Column — Description', colQty:'Column — Qty', colDiscount:'Column — Discount', discType:'Discount type', colDivision:'Column — Division', rounding:'Rounding', roundMode:'Rounding mode', withholding:'Withholding tax', whtType:'Withholding tax type', whtRate:'Withholding tax rate', whtAmount:'Withholding amount', showTaxCol:'Show tax amount column', fixedTotal:'Fixed total', fixedTotalValue:'Fixed total amount', customTitleOn:'Custom title', customTitle:'Custom title text', hideDueDate:'Hide — Due date', hideBalanceDue:'Hide — Balance due', amountInWords:'Amount in words', taxInclusive:'Amounts are tax inclusive', taxExclusive:'Amounts are tax exclusive', creditLimitOn:'Credit limit', creditLimit:'Credit limit amount', pending:'Can have pending transactions' },
+  /* keys that mirror each other on one record: only the first one with a value is shown */
+  _HIST_MIRRORS:[['customer','custName'],['supplier','supName'],['employee','empName'],['date','issueDate'],['description','narration'],['name','bankName','itemName','faName','capName'],['code','bankCode','itemCode','faCode','capCode','custCode','supCode','empCode'],['iban','bankIBAN','ibanNo'],['amount','total'],['email','custEmail','supEmail','empEmail'],['address','custAddress','supAddress','empAddress'],['phone','custMobile','supMobile'],['trn','custTRN','supTRN'],['qty','itemQty'],['salesPrice','itemSellPrice'],['purchasePrice','itemPurchPrice'],['unit','itemUnit'],['openingCost','itemOpeningCost'],['bankAcctNo','accountNo','acctNo'],['paidBy','customer'],['payee','supplier'],['bankDetails','bank_accounts_detail'],['withholdingAmt','whtAmount']],
+  _histLabel(key,k){ var f=((REG[key]&&REG[key].form)||[]).find(function(x){ return x.key===k; }); if(f&&f.label) return f.label; return this._HIST_LABELS[k]||this._humanKey(k); },
+  _histVal(v){ if(v==null||v==='') return '(empty)'; if(v===true||v==='true') return 'Yes'; if(v===false||v==='false') return 'No'; var sv=String(v); if(/^\d{4}-\d{2}-\d{2}$/.test(sv)){ try{ return this.fmtDate?this.fmtDate(sv):sv; }catch(e){ return sv; } } return sv; },
+  /* the fields an update changed: [{label, old, new}] */
+  _histChanges(key,before,after){ var self=this; before=before||{}; after=after||{}; var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1,amounts_in_word:1,allocations:1,printOff:1};
+    var hide={}; this._HIST_MIRRORS.forEach(function(g){ var first=g.find(function(k){ return (after[k]!=null&&after[k]!=='')||(before[k]!=null&&before[k]!==''); }); g.forEach(function(k){ if(k!==first) hide[k]=1; }); });
+    var out=[], seen={}; Object.keys(Object.assign({},before,after)).forEach(function(k){ if(skip[k]||hide[k]||seen[k]) return; seen[k]=1; var o=before[k], n=after[k]; if((o!=null&&typeof o==='object')||(n!=null&&typeof n==='object')) return;
+      var os=(o==null?'':String(o)), ns=(n==null?'':String(n)); if(os===ns) return; out.push({k:k,label:self._histLabel(key,k),old:o,new:n}); });
+    return out; },
   histCrumb(){ return '<div class="ws-crumb"><div class="left">'+App._crumbIco()+' ▸ <a class="led-link" onclick="App.openTool(\'history\')">History</a> ▸ History</div></div>'; },
   histDetailHtml(b){ var self=this; var e=this.histEntry; if(!e) return this.historyHtml(b); var c=REG[e.key]||{};
     var liveRec=(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); }));
@@ -2776,20 +2795,22 @@ const App = {
     var isUpd=(e.action==='update' && e.before); var isDel=(e.action==='delete'); var base=isDel?before:after;
     var title=(c.singular||c.label||KEY2LABEL[e.key]||e.key);
     var isBoolKey=function(k){ return /Enabled$|^has|^Has|On$|Checked$|check/i.test(k); };
-    var fmtVal=function(k,v){ if(v===true||v==='true') return 'is checked'; if(v===false) return 'is not checked'; if((v==='1'||v===1)&&isBoolKey(k)) return 'is checked'; if((v===''||v==='0'||v===0)&&isBoolKey(k)) return 'is not checked'; return self.esc(v==null?'':String(v)); };
-    var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1};
+    var fmtVal=function(k,v){ if(v===true||v==='true') return 'is checked'; if(v===false) return 'is not checked'; if((v==='1'||v===1)&&isBoolKey(k)) return 'is checked'; if((v===''||v==='0'||v===0)&&isBoolKey(k)) return 'is not checked'; return self.esc(self._histVal(v)); };
+    var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1,amounts_in_word:1,printOff:1,allocations:1};
+    { var _src=Object.assign({},before,after); this._HIST_MIRRORS.forEach(function(g){ var first=g.find(function(k){ return _src[k]!=null&&_src[k]!==''; }); g.forEach(function(k){ if(k!==first) skip[k]=1; }); }); }
     var ks=[]; var seen={}; Object.keys(base||{}).forEach(function(k){ if(skip[k]||typeof base[k]==='object'||seen[k]) return; seen[k]=1; ks.push(k); });
     if(isUpd){ Object.keys(before||{}).forEach(function(k){ if(skip[k]||typeof before[k]==='object'||seen[k]) return; seen[k]=1; ks.push(k); }); }
     var rowLV=function(label,val,bold){ return '<tr><td style="font-weight:700;color:#222;white-space:nowrap;padding:3px 30px 3px 0;vertical-align:top">'+self.esc(label)+'</td><td style="padding:3px 0;color:#222'+(bold?';font-weight:700':'')+'">'+val+'</td></tr>'; };
-    var rowSym=function(sym,val,bold){ return '<tr><td style="color:#999;white-space:nowrap;padding:1px 30px 1px 8px;vertical-align:top">'+sym+'</td><td style="padding:1px 0'+(bold?';font-weight:700;color:#111':';color:#666')+'">'+val+'</td></tr>'; };
+    var shown={};
     var rowsH=ks.map(function(k){ var ov=before[k], nv=after[k]; var os=(ov==null?'':String(ov)), ns=(nv==null?'':String(nv));
-      if(isUpd && os!==ns){ var out=rowLV(self._humanKey(k),'',false); if(os!=='') out+=rowSym('\u2013', fmtVal(k,ov), false); if(ns!=='') out+=rowSym('+', fmtVal(k,nv), true); return out; }
-      var vs=isDel?os:ns; if(vs==='') return ''; return rowLV(self._humanKey(k), fmtVal(k, isDel?ov:nv), false);
+      var lbl=self._histLabel(e.key,k);
+      if(isUpd && os!==ns){ return rowLV(lbl,'<span class="hist-old">'+(os!==''?fmtVal(k,ov):'(empty)')+'</span><span class="hist-arrow">→</span><span class="hist-new">'+(ns!==''?fmtVal(k,nv):'(empty)')+'</span>',false); }
+      var vs=isDel?os:ns; if(vs==='') return ''; var fv=fmtVal(k, isDel?ov:nv); if(shown[lbl+'\u0001'+fv]) return ''; shown[lbl+'\u0001'+fv]=1; return rowLV(lbl, fv, false);
     }).filter(Boolean).join('');
     var linesArr=isDel?(before.lines||[]):(after.lines||[]); var linesH='';
     if(Array.isArray(linesArr)&&linesArr.length){ var lh=rowLV('Lines','',false);
       linesArr.forEach(function(ln,i){ lh+='<tr><td style="font-weight:700;color:#222;padding:4px 0 1px 14px">'+(i+1)+'</td><td></td></tr>';
-        [['item','Item'],['description','Line description'],['desc','Line description'],['accountName','Account'],['sub','Sub-account'],['qty','Qty'],['price','Unit price'],['net','Net'],['amount','Amount'],['debit','Debit'],['credit','Credit'],['taxRate','Tax %']].forEach(function(p){ var val=ln[p[0]]; if(val==null||val==='') return; lh+='<tr><td style="font-weight:600;color:#444;white-space:nowrap;padding:2px 30px 2px 30px;vertical-align:top">'+self.esc(p[1])+'</td><td style="padding:2px 0;color:#222">'+self.esc(String(val))+'</td></tr>'; }); });
+        var _ld={}; [['item','Item'],['items','Item'],['description','Line description'],['desc','Line description'],['accountName','Account'],['accounts','Account'],['sub','Sub-account'],['qty','Qty'],['price','Unit price'],['net','Amount'],['amount','Total'],['debit','Debit'],['credit','Credit'],['taxCode','Tax code'],['taxRate','Tax %']].forEach(function(p){ var val=ln[p[0]]; if(val==null||val==='') return; if(_ld[p[1]]) return; _ld[p[1]]=1; lh+='<tr><td style="font-weight:600;color:#444;white-space:nowrap;padding:2px 30px 2px 30px;vertical-align:top">'+self.esc(p[1])+'</td><td style="padding:2px 0;color:#222">'+self.esc(String(val))+'</td></tr>'; }); });
       linesH=lh; }
     var actions='<div style="margin-top:14px;display:flex;gap:10px;align-items:center">'+
       (liveRec?'<button class="btn btn-primary" onclick="App.historyEditRecord()">Edit</button>':'')+
