@@ -296,7 +296,7 @@ const FED = {
   lineCombo(optsHtml, attrs, ph, cs, disabled){ const sty=cs?(' style="'+cs+'"'):''; const e=this.esc(ph||''); return '<div class="li-combo"'+sty+'><div class="li-combo-val placeholder'+(disabled?' locked':'')+'" data-combo-val>'+e+'</div><select class="li-combo-sel"'+(disabled?' disabled':'')+' data-ph="'+e+'"'+(attrs||'')+'>'+optsHtml+'</select></div>'; },
   colCellStyle(c){ let s=''; if(c.h) s+='height:'+c.h+'px;'; if(c.fs) s+='font-size:'+c.fs+'px;'; if(c.bold) s+='font-weight:700;'; if(c.italic) s+='font-style:italic;'; if(c.align) s+='text-align:'+c.align+';'; else if(c.num) s+='text-align:right;'; return s; },
   addField(groupKey,f){ const g=this.groupOf(groupKey); const it=g.items.find(x=>x.f===f); if(!it) return; const b=this.newField(groupKey,f,it.label,it.type); b.row=this.maxRowInGroup(groupKey); this.state.blocks.push(b); this.commit(b.id); },
-  addCustom(groupKey){ const name=prompt('Custom field label:',''); if(!name) return; const b=this.newField(groupKey,'custom',name.trim(),'text'); b.custom=true; b.var=this.uniqueFieldVar(this.slugVar(name),b.id); b.row=this.maxRowInGroup(groupKey); this.state.blocks.push(b); this.commit(b.id); },
+  addCustom(groupKey){ const name=window.UIModal?UIModal.promptGate('Custom field label:','',()=>this.addCustom(groupKey)):null; if(!name) return; const b=this.newField(groupKey,'custom',name.trim(),'text'); b.custom=true; b.var=this.uniqueFieldVar(this.slugVar(name),b.id); b.row=this.maxRowInGroup(groupKey); this.state.blocks.push(b); this.commit(b.id); },
   openModal(html){ this.closeModal(); const ov=document.createElement('div'); ov.className='modal-ov'; ov.id='fed_modalOv'; ov.onclick=function(e){ if(e.target===ov) FED.closeModal(); }; ov.innerHTML=html; (document.getElementById('fedHost')||document.body).appendChild(ov); },
   closeModal(){ const ov=document.getElementById('fed_modalOv'); if(ov) ov.remove(); },
   chooseCustomType(group){
@@ -304,7 +304,7 @@ const FED = {
     const rows=types.map(t=>'<button class="ctype" onclick="FED.addCustomTyped(\''+group+'\',\''+t.t+'\')"><span class="ci">'+t.i+'</span><span><span class="ct">'+t.l+'</span><br><span class="cd">'+this.esc(t.d)+'</span></span></button>').join('');
     this.openModal('<div class="modal"><div class="modal-h">Add custom field</div><div class="modal-b">'+rows+'</div><div class="modal-f"><button class="tbtn" onclick="FED.closeModal()">Cancel</button></div></div>');
   },
-  addCustomTyped(group,type){ this.closeModal(); const name=prompt('Custom field label:',''); if(!name) return; let b;
+  addCustomTyped(group,type){ this.closeModal(); const name=window.UIModal?UIModal.promptGate('Custom field label:','',()=>this.addCustomTyped(group,type)):null; if(!name) return; let b;
     if(type==='formula'){ b=this.newField(group,'custom',name.trim(),'number'); b.inputMode='formula'; }
     else if(type==='multi'){ b=this.newField(group,'custom',name.trim(),'multi'); b.options=['Option 1','Option 2']; }
     else if(type==='select'){ b=this.newField(group,'custom',name.trim(),'select'); b.options=['Option 1','Option 2']; }
@@ -351,7 +351,7 @@ const FED = {
   accountOptionsHtml(P){ const a=this.accountNames(); if(!a.length) return P+'<option value="">— select account —</option>\n'+P+'<!-- accounts come from the accounting app -->'; return P+'<option value="">— select account —</option>\n'+a.map(n=>P+'<option>'+this.esc(n)+'</option>').join('\n'); },
   ensureLines(){ let lb=this.linesBlock(); if(!lb){ lb={id:this.uid(),type:'lines',columns:[]}; this.state.blocks.push(lb); } this.normalizeLines(lb); return lb; },
   addLineCol(key){ const lb=this.ensureLines(); const cols=this.normalizeLines(lb); const i=cols.findIndex(c=>c.key===key); if(i>=0){ const rm=cols.splice(i,1)[0]; if(this.selCol===rm.id) this.selCol=null; } else { const cat=PALETTE.find(g=>g.isLines).items.find(x=>x.c===key); cols.push(this.newCol(key,cat?cat.label:key,cat&&cat.num)); } this.commit(lb.id); },
-  addLineCustomCol(){ const lb=this.ensureLines(); const name=prompt('Custom line column label:',''); if(!name) return; const cols=this.normalizeLines(lb); const c=this.newCol('custom',name.trim(),false); c.var=this.uniqueVar(this.slugVar(name),cols,c.id); cols.push(c); this.selCol=c.id; this.commit(lb.id); },
+  addLineCustomCol(){ const lb=this.ensureLines(); const name=window.UIModal?UIModal.promptGate('Custom line column label:','',()=>this.addLineCustomCol()):null; if(!name) return; const cols=this.normalizeLines(lb); const c=this.newCol('custom',name.trim(),false); c.var=this.uniqueVar(this.slugVar(name),cols,c.id); cols.push(c); this.selCol=c.id; this.commit(lb.id); },
   commit(selId){ if(selId!==undefined) this.sel=selId; this.save(true); this.renderRail(); this.renderStage(); this.renderProps(); },
   removeBlock(id){ this.state.blocks=this.state.blocks.filter(b=>b.id!==id); if(this.sel===id) this.sel=null; this.commit(); },
   moveBlock(id,dir){ const a=this.state.blocks; const i=a.findIndex(b=>b.id===id); const j=i+dir; if(i<0||j<0||j>=a.length) return; const t=a[i]; a[i]=a[j]; a[j]=t; this.commit(); },
@@ -882,8 +882,8 @@ const FED = {
     const blob=new Blob([json],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='accounting-form-templates.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
     if(!silent) alert('Published '+Object.keys(templates).length+' form design(s).'); },
   updateExit(){ this.publishBundle(true); if(window.__fedExit){ try{ window.__fedExit(); return; }catch(e){} } if(window.parent && window.parent!==window){ try{ window.parent.postMessage({type:'mgr-form-done'}, '*'); }catch(e){} } },
-  resetDefault(){ if(!confirm('Reset this document to its default layout? Your changes to this document will be lost.')) return; this.docs[this.docType]=this.starter(this.docType); this.state=this.docs[this.docType]; this.sel=null; this.selCol=null; this.migrateBlocks(this.state); this.save(true); this.renderDocSelect(); this.renderRail(); this.renderStage(); this.renderProps(); },
-  clearForm(){ if(!confirm('Clear this document’s form? This removes all its fields.')) return; this.state.blocks=[]; this.sel=null; this.selCol=null; this.commit(); },
+  resetDefault(){ if(!(window.UIModal?UIModal.gate('Reset this document to its default layout? Your changes to this document will be lost.',()=>this.resetDefault()):true)) return; this.docs[this.docType]=this.starter(this.docType); this.state=this.docs[this.docType]; this.sel=null; this.selCol=null; this.migrateBlocks(this.state); this.save(true); this.renderDocSelect(); this.renderRail(); this.renderStage(); this.renderProps(); },
+  clearForm(){ if(!(window.UIModal?UIModal.gate('Clear this document’s form? This removes all its fields.',()=>this.clearForm()):true)) return; this.state.blocks=[]; this.sel=null; this.selCol=null; this.commit(); },
   openDocByKey(key){ const k=DOC_TYPES.some(d=>d.k===key)?key:'custom'; if(k===this.docType){ this.renderDocSelect(); return; } this.switchDoc(k); },
   announceReady(){ try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'mgr-editor-ready'}, '*'); }catch(e){} },
 };

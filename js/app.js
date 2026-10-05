@@ -206,7 +206,7 @@ const App = {
   removeSelected(){
     const ids=[...document.querySelectorAll('.biz-chk:checked')].map(c=>+c.value);
     if(!ids.length) return;
-    if(!confirm('Remove '+ids.length+' business'+(ids.length>1?'es':'')+'? This cannot be undone.')) return;
+    if(!this._ask('Remove '+ids.length+' business'+(ids.length>1?'es':'')+'? This cannot be undone.',()=>this.removeSelected())) return;
     DB.set(DB.k.biz, DB.get(DB.k.biz,[]).filter(b=>!ids.includes(b.id))); this.renderBusinesses();
   },
   onChkChange(){ document.getElementById('removeBtn').disabled=document.querySelectorAll('.biz-chk:checked').length===0; },
@@ -229,7 +229,7 @@ const App = {
   closeBusiness(){ this.openBiz=null; this.go('businesses'); },
   curBiz(){ return DB.get(DB.k.biz,[]).find(b=>b.id===this.openBiz); },
   saveBiz(b){ const all=DB.get(DB.k.biz,[]); const i=all.findIndex(x=>x.id===b.id); if(i>=0){ all[i]=b; DB.set(DB.k.biz,all); } },
-  renameBusiness(){ const b=this.curBiz(); if(!b) return; const n=prompt('Rename business',b.name); if(n===null) return; b.name=n.trim()||b.name; this.saveBiz(b); this.renderWorkspace(); },
+  renameBusiness(){ const b=this.curBiz(); if(!b) return; const n=this._askText('Rename business',b.name,()=>this.renameBusiness()); if(n===null) return; b.name=n.trim()||b.name; this.saveBiz(b); this.renderWorkspace(); },
 
   selectSection(label){ this.closeNav(); this.navTrail=[]; this.pageNum=1; this.batchMode=false; this.batchSel=null; this.advFilters=null; this.histReturn=false; this.wsSection=label; this.listQuery=''; this.editingId=null; this.setView=null; this.repView=null; this.ledgerId=null;
     this.wsMode = label==='Summary' ? 'summary' : (label==='Dashboard' ? 'dashboard' :
@@ -570,7 +570,7 @@ const App = {
   batchDelete(){ this.batchMode=true; this.batchSel={}; this.renderWorkspace(); },
   batchCancel(){ this.batchMode=false; this.batchSel={}; this.renderWorkspace(); },
   batchToggle(id){ this.batchSel=this.batchSel||{}; if(this.batchSel[id]) delete this.batchSel[id]; else this.batchSel[id]=1; var c=document.getElementById('batchCount'); if(c) c.textContent=Object.keys(this.batchSel).length; },
-  batchDeleteRun(){ var b=this.curBiz(); var key=this._sectionKey(); var ids=Object.keys(this.batchSel||{}).map(Number); if(!ids.length){ alert('Select at least one row first.'); return; } var c=REG[key]||{}; var noun=(c.label||'records'); var _lk=(b&&b.lockDate)||''; if(_lk){ var _arr0=(b.records&&b.records[key])||[]; var _locked=_arr0.filter(function(r){ if(ids.indexOf(r.id)<0) return false; var _d=String(r.issueDate||r.date||'').slice(0,10); return _d&&_d<=_lk; }).length; if(_locked){ alert(_locked+' of the selected '+noun+' are dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!confirm('Delete '+ids.length+' selected '+noun+'?\n\nThis can be undone from History.')) return;
+  batchDeleteRun(){ var b=this.curBiz(); var key=this._sectionKey(); var ids=Object.keys(this.batchSel||{}).map(Number); if(!ids.length){ alert('Select at least one row first.'); return; } var c=REG[key]||{}; var noun=(c.label||'records'); var _lk=(b&&b.lockDate)||''; if(_lk){ var _arr0=(b.records&&b.records[key])||[]; var _locked=_arr0.filter(function(r){ if(ids.indexOf(r.id)<0) return false; var _d=String(r.issueDate||r.date||'').slice(0,10); return _d&&_d<=_lk; }).length; if(_locked){ alert(_locked+' of the selected '+noun+' are dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!this._ask('Delete '+ids.length+' selected '+noun+'?\n\nThis can be undone from History.',()=>this.batchDeleteRun())) return;
     var idset={}; ids.forEach(function(i){ idset[i]=1; }); var arr=(b.records&&b.records[key])||[]; var deleted=arr.filter(function(r){ return idset[r.id]; }).map(function(r){ return JSON.parse(JSON.stringify(r)); });
     b.records[key]=arr.filter(function(r){ return !idset[r.id]; }); try{ this._logActivity(b,'delete',key,null,null,{bulkDeleted:deleted, label:'Batch delete — '+deleted.length+' '+noun}); }catch(e){} try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.batchMode=false; this.batchSel={}; this.renderWorkspace(); var n=deleted.length; setTimeout(function(){ alert('Deleted '+n+' '+noun+'.'); },30); },
 
@@ -603,6 +603,10 @@ const App = {
   /* ----- app-level modal overlay ----- */
   _openOverlay(html){ this._closeOverlay(); const ov=document.createElement('div'); ov.id='appOverlay'; ov.className='app-modal-ov'; ov.onclick=function(e){ if(e.target===ov) App._closeOverlay(); }; ov.innerHTML='<div class="app-modal">'+html+'</div>'; document.body.appendChild(ov); },
   _closeOverlay(){ const o=document.getElementById('appOverlay'); if(o) o.remove(); },
+  /* App modals instead of the browser's confirm()/prompt() (js/ui-modal.js). `if(!this._ask(msg,rerun)) return;`
+     opens the modal and returns false; OK re-runs the action, which then passes straight through. */
+  _ask(msg,rerun){ if(typeof UIModal!=='undefined'&&UIModal.gate) return UIModal.gate(msg,rerun); return (typeof confirm==='function')?confirm(msg):true; },
+  _askText(msg,def,rerun){ if(typeof UIModal!=='undefined'&&UIModal.promptGate) return UIModal.promptGate(msg,def,rerun); return null; },
 
   /* ----- configurable list columns (#3) ----- */
   _sectionKey(){ return LABEL2KEY[this.wsSection]; },
@@ -1114,7 +1118,7 @@ const App = {
         if(data.reference===''||data.reference==null){ const _rc=document.getElementById('f_refAuto'); if(_rc&&_rc.checked) data.reference=this.nextRef(b,LABEL2KEY[this.wsSection]); }
       } else {
         const j=this.journalTotals();
-        if(Math.abs(j.diff)>0.005 && !confirm('Debits ('+this.money(j.debit)+') and credits ('+this.money(j.credit)+') are out of balance by '+this.money(Math.abs(j.diff))+'.\n\nManager requires journal entries to balance. Save anyway?')) return;
+        if(Math.abs(j.diff)>0.005 && !this._ask('Debits ('+this.money(j.debit)+') and credits ('+this.money(j.credit)+') are out of balance by '+this.money(Math.abs(j.diff))+'.\n\nManager requires journal entries to balance. Save anyway?',()=>this.saveRecord())) return;
         data.lines=lines.map(ln=>({account:ln.account||'',sub:ln.sub||'',desc:ln.desc||'',debit:this.parseNum(ln.debit),credit:this.parseNum(ln.credit)}));
         data.debit=j.debit; data.credit=j.credit;
       }
@@ -1178,7 +1182,7 @@ const App = {
     this.saveBiz(b);
     return {ok:true,record:rec};
   },
-  deleteRecord(id){ if(!this.guardWrite()) return; const b=this.curBiz(), c=this.cfg(); var _r=(this.records(b)||[]).find(function(r){return r.id===id;}); var _lk=(b&&b.lockDate)||''; if(_lk&&_r){ var _d=String(_r.issueDate||_r.date||'').slice(0,10); if(_d&&_d<=_lk){ alert('This entry is dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!confirm('Delete this '+c.singular.toLowerCase()+'?')) return;
+  deleteRecord(id){ if(!this.guardWrite()) return; const b=this.curBiz(), c=this.cfg(); var _r=(this.records(b)||[]).find(function(r){return r.id===id;}); var _lk=(b&&b.lockDate)||''; if(_lk&&_r){ var _d=String(_r.issueDate||_r.date||'').slice(0,10); if(_d&&_d<=_lk){ alert('This entry is dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!this._ask('Delete this '+c.singular.toLowerCase()+'?',()=>this.deleteRecord(id))) return;
     var _key=this._sectionKey(); var _bef=(this.records(b)||[]).find(function(r){return r.id===id;}); _bef=_bef?JSON.parse(JSON.stringify(_bef)):null;
     this.setRecords(b,this.records(b).filter(r=>r.id!==id)); try{ this._logActivity(b,'delete',_key,null,_bef); }catch(e){} refreshSummary(b); this.saveBiz(b); if(!this.backFromRecord()) this.backToList(); },
   backToList(){ this.recReturn=null; this.histReturn=false; this.editingId=null; this.wsMode='list'; this.renderWorkspace(); },
@@ -1428,18 +1432,46 @@ const App = {
     this._openOverlay('<div class="app-modal-h">Transaction journal — '+self.esc(rec.reference||(c&&c.singular)||'')+'</div><div class="app-modal-b"><table class="reg-tbl"><thead><tr><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>'+body+'</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td>'+(rows.length?(bal?'<span style="color:#0b6b49">Balanced ✓</span>':'<span style="color:#b42318">Out of balance</span>'):'')+'</td><td class="r m">'+self.money(dr)+'</td><td class="r m">'+self.money(cr)+'</td></tr></tfoot></table></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Close</button></div>'); },
 
   /* ----- copy to (create a related document) ----- */
-  _copyTargets:{ salesInv:['receipts','creditNotes','deliveryNotes','salesInv'], purchInv:['payments','debitNotes','purchInv'], salesQuote:['salesInv'], purchOrder:['purchInv'], creditNotes:['salesInv'], debitNotes:['purchInv'], receipts:['payments'], payments:['receipts'], journal:['journal'] },
+  /* Copy to — the Manager.io matrix. Party, lines (item, account, description, qty, price, tax), tax options and
+     reference are carried over; money/settlement state is not. */
+  _copyTargets:{ salesQuotes:['salesOrders','salesInv'], salesOrders:['salesInv','deliveryNotes'], salesInv:['receipts','creditNotes','deliveryNotes'],
+    purchQuotes:['purchOrders','purchInv'], purchOrders:['purchInv','goodsRec'], purchInv:['payments','debitNotes','goodsRec'],
+    creditNotes:['salesInv'], debitNotes:['purchInv'], receipts:['payments'], payments:['receipts'], journal:['journal'] },
   copyToMenu(){ var self=this; var key=LABEL2KEY[this.wsSection]; var targets=(this._copyTargets[key]||[]).filter(function(t){ return KEY2LABEL[t]; });
     if(!targets.length){ alert('There is nothing to copy this document to.'); return; }
     var btns=targets.map(function(t){ var lbl=(REG[t]&&REG[t].singular)||KEY2LABEL[t]||t; return '<button class="btn" style="justify-content:flex-start" onclick="App.copyTo(\''+t+'\')">▸ New '+self.esc(lbl)+'</button>'; }).join('');
-    this._openOverlay('<div class="app-modal-h">Copy to…</div><div class="app-modal-b"><div style="display:flex;flex-direction:column;gap:8px">'+btns+'</div></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Cancel</button></div>'); },
+    this._openOverlay('<div class="app-modal-h">Copy to…</div><div class="app-modal-b"><div style="display:flex;flex-direction:column;gap:8px">'+btns+'</div></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Cancel</button></div>');
+    var ov=document.getElementById('appOverlay'); if(ov&&ov.setAttribute) ov.setAttribute('data-nav-close','1'); },
+  /* the prefill a "Copy to" opens the target form with (pure: no DOM) */
+  copyPrefill(b,key,rec,targetKey){ rec=rec||{};
+    var total=0; (rec.lines||[]).forEach(function(ln){ total+=Number(ln.amount||0)||0; }); if(!total) total=Number(rec.amount||rec.total||0)||0;
+    var isSale=function(k){ return ['salesQuotes','salesOrders','salesInv','creditNotes','deliveryNotes'].indexOf(k)>=0; };
+    var isPurch=function(k){ return ['purchQuotes','purchOrders','purchInv','debitNotes','goodsRec'].indexOf(k)>=0; };
+    if(key==='salesInv'&&targetKey==='receipts'&&typeof TxnForms!=='undefined') return TxnForms.receiptPrefill(b,rec);
+    if(key==='salesInv'&&targetKey==='receipts') return { date:rec.date, customer:rec.customer, paidBy:rec.customer, paidByType:'customer', receivedIn:'', lines:[{accountName:'Accounts receivable', sub:rec.customer, amount:total}] };
+    if(key==='purchInv'&&targetKey==='payments'){ var due=null; try{ var row=settlementIndex(b,'sup').byUid[invUid(rec)]; if(row) due=row.outstanding; }catch(e){}
+      if(due==null) due=(rec.balanceDue!=null&&rec.balanceDue!=='')?Number(rec.balanceDue):total; due=Math.round((Number(due)||0)*100)/100;
+      var ap=(b.coa||[]).find(function(n){ return n.type==='account'&&/^accounts payable$/i.test(n.name||''); }); var uid=invUid(rec);
+      return { date:new Date().toISOString().slice(0,10), payeeType:'supplier', payee:rec.supplier||rec.supName||'', supplier:rec.supplier||rec.supName||'',
+        description:'Payment for purchase invoice '+(rec.reference||''), lines:[{ account:ap?ap.id:'', accountName:'Accounts payable', sub:rec.supplier||rec.supName||'', amount:due, price:due }],
+        _keepAlloc:true, allocations:(due>0&&uid)?[{ key:'purchInv', uid:uid, party:rec.supplier||'', amount:due }]:[] }; }
+    var pf=JSON.parse(JSON.stringify(rec));
+    ['id','uuid','allocations','balanceDue','status','amount','_keepAlloc','withholdingAmt','paid'].forEach(function(k){ delete pf[k]; });
+    if(targetKey===key) delete pf.reference;
+    if(isSale(targetKey)){ pf.customer=rec.customer||rec.custName||''; if(pf.customer) pf.custName=pf.customer; }
+    if(isPurch(targetKey)){ pf.supplier=rec.supplier||rec.supName||''; if(pf.supplier) pf.supName=pf.supplier; }
+    if(pf.date==null&&pf.issueDate) pf.date=pf.issueDate; if(pf.issueDate==null&&pf.date) pf.issueDate=pf.date;
+    pf.lines=(rec.lines||[]).filter(function(ln){ return ln&&!ln.rounding; }).map(function(ln){ var o=JSON.parse(JSON.stringify(ln));
+      if(o.item==null&&o.items!=null) o.item=o.items; if(o.items==null&&o.item!=null) o.items=o.item;
+      if(o.desc==null&&o.description!=null) o.desc=o.description; if(o.description==null&&o.desc!=null) o.description=o.desc;
+      if((o.accountName==null||o.accountName==='')&&o.account){ try{ o.accountName=acctName(b,o.account)||''; }catch(e){} }
+      if(o.accounts==null&&o.accountName) o.accounts=o.accountName;
+      if((o.taxRate==null||o.taxRate==='')&&o.taxCode){ var tc=(b.taxCodes||[]).find(function(t){ return t&&t.name===o.taxCode; }); if(tc) o.taxRate=tc.rate; }
+      return o; });
+    pf.copiedFrom={ key:key, id:rec.id, reference:rec.reference||'' };
+    return pf; },
   copyTo(targetKey){ this._closeOverlay(); var b=this.curBiz(); var key=LABEL2KEY[this.wsSection]; var rec=this.records(b).find(r=>r.id===this.editingId); if(!rec) return; var label=KEY2LABEL[targetKey]; if(!label){ alert('Cannot copy to that document.'); return; }
-    var total=0; (rec.lines||[]).forEach(function(ln){ total+=Number(ln.amount||0)||0; }); if(!total) total=Number(rec.amount||0)||0;
-    var pf;
-    if(key==='salesInv'&&targetKey==='receipts'&&typeof TxnForms!=='undefined'){ pf=TxnForms.receiptPrefill(b,rec); }
-    else if(key==='salesInv'&&targetKey==='receipts'){ pf={ date:rec.date, customer:rec.customer, receivedIn:'', lines:[{accountName:'Accounts receivable', sub:rec.customer, amount:total}] }; }
-    else if(key==='purchInv'&&targetKey==='payments'){ pf={ date:rec.date, supplier:rec.supplier, paidFrom:'', lines:[{accountName:'Accounts payable', sub:rec.supplier, amount:total}] }; }
-    else { pf=JSON.parse(JSON.stringify(rec)); delete pf.id; delete pf.uuid; delete pf.reference; }
+    var pf=this.copyPrefill(b,key,rec,targetKey);
     this._prefill=pf; this.recReturn=null; this.histReturn=false; this.wsSection=label; this.editingId=null; this.wsMode='form'; this.renderWorkspace(); },
 
   /* ----- customer / supplier ledger ----- */
@@ -1816,7 +1848,7 @@ const App = {
   reportEdit(key,id){ this.repView=key; this.repMode='edit'; this.repInst=id; this.renderMain(this.curBiz()); },
   reportOpen(key,id){ this.repView=key; this.repMode='view'; this.repInst=id; this.renderMain(this.curBiz()); },
   reportClone(key,id){ var b=this.curBiz(); var inst=this._getInst(b,key,id); if(!inst) return; var cp=JSON.parse(JSON.stringify(inst)); cp.id=this._newReportId(); cp.title=(inst.title||'Report')+' (copy)'; b.reports[key]=b.reports[key]||[]; b.reports[key].push(cp); this.saveBiz(b); this.repView=key; this.repMode='edit'; this.repInst=cp.id; this.renderMain(b); },
-  reportDelete(key,id){ if(!confirm('Delete this report? This cannot be undone.')) return; var b=this.curBiz(); b.reports[key]=((b.reports&&b.reports[key])||[]).filter(function(r){ return String(r.id)!==String(id); }); this.saveBiz(b); this.repView=key; this.repMode='list'; this.repInst=null; this.renderMain(b); },
+  reportDelete(key,id){ if(!this._ask('Delete this report? This cannot be undone.',()=>this.reportDelete(key,id))) return; var b=this.curBiz(); b.reports[key]=((b.reports&&b.reports[key])||[]).filter(function(r){ return String(r.id)!==String(id); }); this.saveBiz(b); this.repView=key; this.repMode='list'; this.repInst=null; this.renderMain(b); },
   _applyEditForm(b,key,id){ var inst=this._getInst(b,key,id); if(!inst) return null; var g=function(i){ var el=document.getElementById(i); return el?el.value:''; }; var ck=function(i){ var el=document.getElementById(i); return el?el.checked:false; };
     inst.title=g('rp_title')||inst.title; inst.desc=g('rp_desc'); inst.from=g('rp_from'); inst.to=g('rp_to'); inst.colName=g('rp_col')||'Total';
     var m=document.getElementById('rp_method'); if(m) inst.method=m.value; var r=document.getElementById('rp_round'); if(r) inst.rounding=r.value;
@@ -2777,7 +2809,7 @@ const App = {
   historyEditRecord(){ var b=this.curBiz(); var e=this.histEntry; if(!e) return; var label=KEY2LABEL[e.key]; var rec=label?(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); })):null; if(rec&&label){ this.toolView=null; this.navTrail=[]; this.recReturn=null; this.wsSection=label; this.listQuery=''; this.editingId=rec.id; this.wsMode='form'; this.renderMain(b); } else alert('Record not found.'); },
   historyDeleteRecord(){ var b=this.curBiz(); var e=this.histEntry; if(!e) return; var label=KEY2LABEL[e.key]; var rec=label?(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); })):null; if(!rec||!label){ alert('Record not found.'); return; } this.toolView=null; this.navTrail=[]; this.recReturn=null; this.wsSection=label; this.deleteRecord(rec.id); },
   historyUndo(id){ var b=this.curBiz(); var log=(b.activity||[]); var e=log.find(function(x){ return x.id===id; }); if(!e||e.undone) return;
-    if(!confirm('Undo this change?\n\n'+e.label+'\n\nThis cannot be redone.')) return;
+    if(!this._ask('Undo this change?\n\n'+e.label+'\n\nThis cannot be redone.',()=>this.historyUndo(id))) return;
     b.records=b.records||{}; var arr=(b.records[e.key]||[]).slice();
     if(e.bulkIds&&e.bulkIds.length){ var ids={}; e.bulkIds.forEach(function(x){ ids[x]=1; }); arr=arr.filter(function(r){ return !ids[r.id]; }); }
     else if(e.bulkDeleted&&e.bulkDeleted.length){ e.bulkDeleted.forEach(function(r){ arr.push(JSON.parse(JSON.stringify(r))); }); }
@@ -3458,7 +3490,7 @@ const App = {
       self.renderMain(b); };
     rd.readAsDataURL(f); },
   attachRemove(i){ var b=this.curBiz(); var f=(b.attachments||[])[i]; if(!f) return;
-    if(!confirm('Delete “'+f.name+'”? This cannot be undone.')) return;
+    if(!this._ask('Delete “'+f.name+'”? This cannot be undone.',()=>this.attachRemove(i))) return;
     b.attachments.splice(i,1); this.saveBiz(b); this.renderMain(b); },
 
   /* ---- obsolete features ---- */
@@ -3619,7 +3651,7 @@ const App = {
     if(this.ctrlEditId==='new'){ b.coa.push({id:'a'+Math.random().toString(36).slice(2,9),type:'account',name:name,code:'',parent:sec,balance:0,control:1,custCtrl:1,madeOf:made}); }
     else { const a=b.coa.find(x=>x.id===this.ctrlEditId); if(a){ a.name=name; a.parent=sec; a.madeOf=made; a.control=1; a.custCtrl=1; } }
     try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.ctrlEditId=null; this.renderMain(b); },
-  ctrlRemove(id){ const b=this.curBiz(); if(!b) return; const a=(b.coa||[]).find(x=>x.id===id); if(!a||!a.custCtrl) return; if(!confirm('Delete control account “'+(a.name||'')+'”?')) return; b.coa=b.coa.filter(x=>x.id!==id); try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.renderMain(b); },
+  ctrlRemove(id){ const b=this.curBiz(); if(!b) return; const a=(b.coa||[]).find(x=>x.id===id); if(!a||!a.custCtrl) return; if(!this._ask('Delete control account “'+(a.name||'')+'”?',()=>this.ctrlRemove(id))) return; b.coa=b.coa.filter(x=>x.id!==id); try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.renderMain(b); },
 
   set_footers(b){ const d=b.details||{};
     const inner='<div class="info-bar">This footer prints at the bottom of every voucher and invoice, below the totals. Use it for thank-you notes, return policies or registration details.</div>'+
@@ -3653,7 +3685,7 @@ const App = {
   fmtSave(b){ if(this.fmtForm && this.fmtDraft && this.wsMode==='settings') return; this.saveBiz(b); },
   commitFmtForm(){ const b=this.curBiz(); const key=this.fmtForm; if(!key||!this.fmtDraft) return; b.formConfig=b.formConfig||{}; b.formConfig[key]=JSON.parse(JSON.stringify(this.fmtDraft)); this.saveBiz(b); this.fmtDraft=JSON.parse(JSON.stringify(b.formConfig[key])); this.renderMain(b); },
   discardFmtForm(){ const b=this.curBiz(); const key=this.fmtForm; this.fmtDraft=null; this.cfgEnsure(b,key); this.entryOrderFor(b,key); this.gridFor(b,key); this.fmtDraft=JSON.parse(JSON.stringify(b.formConfig[key])); this.fmtSel=null; this.fmtColMenu=false; this.renderMain(b); },
-  backFromFmtForm(){ if(this.fmtDirty() && !confirm('You have unsaved changes. Discard them and leave?')) return; this.fmtDraft=null; this.openFmtCat(this.fmtCat); },
+  backFromFmtForm(){ if(this.fmtDirty() && !this._ask('You have unsaved changes. Discard them and leave?',()=>this.backFromFmtForm())) return; this.fmtDraft=null; this.openFmtCat(this.fmtCat); },
   set_themes(b){
     if(this.fmtForm){ return this.advDesignerHtml(b,this.fmtForm); }
     if(this.fmtCat==='form') return this.crumbThemes('Form Formatting')+'<div class="info-bar">Pick a form to customise its printed layout — choose which fields print, reorder &amp; resize line-item columns, and add your own custom fields.</div>'+this.formListHtml(b,'form')+'<div class="form-actions"><button class="btn" onclick="App.openThemesHub()">◀ Back to Custom Themes</button></div>';
@@ -3782,7 +3814,7 @@ const App = {
   wpSetPage(prop,val){ const b=this.curBiz(); const c=this.cfgEnsure(b,this.fmtForm); c.docPage=c.docPage||{size:'A4'}; c.docPage[prop]=val; const p=document.getElementById('wpPage'); if(p&&prop==='size') p.style.width=(val==='Letter'?'816px':'794px'); this.saveBiz(b); this.wpSaveNow(true); },
   wpAutoSave(){ clearTimeout(this._wpTimer); const s=document.getElementById('wpStatus'); if(s){ s.textContent='Saving…'; s.style.color='var(--warn)'; } this._wpTimer=setTimeout(()=>this.wpSaveNow(true),700); },
   wpSaveNow(silent){ const b=this.curBiz(); const p=document.getElementById('wpPage'); if(!p||!this.fmtForm) return; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=p.innerHTML; if(!c.docPage) c.docPage={size:'A4'}; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent=silent?'✓ Saved':'✓ All changes saved'; s.style.color='var(--success)'; } },
-  wpResetDoc(){ if(!confirm('Reset this voucher to the default layout? Your custom design will be replaced.')) return; const b=this.curBiz(); const def=this.wpDefaultDoc(b,this.fmtForm); const p=document.getElementById('wpPage'); if(p) p.innerHTML=def; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=def; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent='✓ Reset to default'; s.style.color='var(--success)'; } },
+  wpResetDoc(){ if(!this._ask('Reset this voucher to the default layout? Your custom design will be replaced.',()=>this.wpResetDoc())) return; const b=this.curBiz(); const def=this.wpDefaultDoc(b,this.fmtForm); const p=document.getElementById('wpPage'); if(p) p.innerHTML=def; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=def; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent='✓ Reset to default'; s.style.color='var(--success)'; } },
   amountInWords(n,cur){ n=Number(n)||0; const neg=n<0; n=Math.abs(n); const whole=Math.floor(n); const cents=Math.round((n-whole)*100);
     const ones=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
     const tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
@@ -3911,7 +3943,7 @@ const App = {
   vbRerenderPreview(){ const p=document.getElementById('vbPreview'); if(p) p.innerHTML=this.vbPreviewHtml(this.curBiz(),this.fmtForm); const code=document.getElementById('vbCode'); if(code) code.value=this.vbCodeHtml(); },
   vbSync(){ const b=this.curBiz(); const c=this.vbCfg(); c.vdoc=this.vbModel(); this.saveBiz(b); const st=document.getElementById('vbStatus'); if(st){ st.textContent='\u2713 Saved'; st.style.color='var(--success)'; } },
   vbSaveNow(){ this.vbSync(); const st=document.getElementById('vbStatus'); if(st){ st.textContent='\u2713 All changes saved'; st.style.color='var(--success)'; } },
-  vbResetDoc(){ if(!confirm('Reset this voucher to the default theme? Your changes will be replaced.')) return; const c=this.vbCfg(); c.vdoc=this.vbDefaultModel(this.curBiz(),this.fmtForm); this.saveBiz(this.curBiz()); this.vbRerenderEditor(); },
+  vbResetDoc(){ if(!this._ask('Reset this voucher to the default theme? Your changes will be replaced.',()=>this.vbResetDoc())) return; const c=this.vbCfg(); c.vdoc=this.vbDefaultModel(this.curBiz(),this.fmtForm); this.saveBiz(this.curBiz()); this.vbRerenderEditor(); },
   vbBack(){ this.fmtForm=null; this.fmtDraft=null; this.openFmtCat(this.fmtCat||'voucher'); },
 
   fmtSampleRec(b,key){ const sc=this.formSchema(key); const tc=(b.taxCodes&&b.taxCodes[0])?b.taxCodes[0].name:''; const today=new Date().toISOString().slice(0,10); const due=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
@@ -4297,7 +4329,7 @@ const App = {
   coaDelete(id){ const b=this.curBiz(); const n=b.coa.find(x=>x.id===id); if(!n) return;
     if(n.mandatory||n.control){ alert('This account can\u2019t be deleted.'); return; }
     if(n.type==='group'&&b.coa.some(x=>x.parent===id)){ alert('Move or delete the accounts inside this group first.'); return; }
-    if(!confirm('Delete \u201c'+n.name+'\u201d?')) return;
+    if(!this._ask('Delete \u201c'+n.name+'\u201d?',()=>this.coaDelete(id))) return;
     b.coa=b.coa.filter(x=>x.id!==id);
     if(n.type==='total'&&b.coaTop){ ['bs','pl'].forEach(s=>{ b.coaTop[s]=b.coaTop[s].filter(x=>x!==id); }); }
     refreshSummary(b); this.saveBiz(b); this.coaCtx=null; this.renderMain(b); },
