@@ -205,7 +205,7 @@
   function fieldHtml(src, f){
     var id = 'qc_' + f.key, A = app(), b = biz();
     if(f.type === 'check')
-      return '<label class="chk-row"><input type="checkbox" id="'+id+'"> '+esc(f.label)+'</label>';
+      return '<label class="chk-row"><input type="checkbox" id="'+id+'" onchange="QuickCreate.reveal()"> '+esc(f.label)+'</label>';
     var lbl = '<label class="fld">'+esc(f.label)+(f.req?' *':'')+'</label>';
     if(f.type === 'textarea') return lbl + '<textarea id="'+id+'" rows="2"></textarea>';
     if(f.type === 'select')
@@ -227,8 +227,22 @@
     }
     var t = (f.type === 'date') ? 'date' : (f.type === 'number' || f.type === 'money') ? 'text' : 'text';
     var im = (f.type === 'number' || f.type === 'money') ? ' inputmode="decimal"' : '';
-    return lbl + '<input id="'+id+'" type="'+t+'"'+im+'>';
+    return (f.showIf ? '' : lbl) + '<input id="'+id+'" type="'+t+'"'+im+(f.ph?' placeholder="'+esc(f.ph)+'"':'')+(f.showIf?' aria-label="'+esc(f.label)+'"':'')+'>';
   }
+
+  /* Same layout as the full form: fields sharing a `row` sit side by side (Name | Code), and a field
+     with `showIf` is revealed under its checkbox (IBAN, Credit limit). */
+  function layoutHtml(src, fields){
+    var h='', i=0;
+    while(i<fields.length){ var f=fields[i];
+      if(f.row){ var g=[]; while(i<fields.length && fields[i].row===f.row){ g.push(fields[i]); i++; }
+        h+='<div class="ff-row">'+g.map(function(x){ return '<div class="ff-f'+(x.w?' ff-small':'')+'">'+fieldHtml(src, x)+'</div>'; }).join('')+'</div>'; continue; }
+      h+= f.showIf ? '<div class="ff-reveal" data-showif="'+esc(f.showIf)+'" hidden>'+fieldHtml(src, f)+'</div>' : fieldHtml(src, f);
+      i++; }
+    return h;
+  }
+  function reveal(){ var d=global.document, ov=d.getElementById('appOverlay'); if(!ov) return;
+    ov.querySelectorAll('[data-showif]').forEach(function(el){ var cb=d.getElementById('qc_'+el.getAttribute('data-showif')); el.hidden=!(cb && cb.checked); }); }
 
   /** Open the quick-create dialog for `src`, wired back to `sel`. */
   function open(src, sel, seedName){
@@ -241,7 +255,7 @@
     var html =
       '<div class="app-modal-h">Add New ' + esc(labelOf(src)) + '</div>' +
       '<div class="app-modal-b"><div id="qcErr" class="qc-err hide"></div>' +
-        fields.map(function(f){ return fieldHtml(src, f); }).join('') +
+        layoutHtml(src, fields) +
       '</div>' +
       '<div class="app-modal-f"><span style="flex:1"></span>' +
         '<button class="btn" onclick="QuickCreate.cancel()">Cancel</button>' +
@@ -455,7 +469,7 @@
     ADD:ADD, SEARCH_MIN:SEARCH_MIN, SOURCES:SOURCES,
     labelOf:labelOf, valueKeyOf:valueKeyOf, fieldsFor:fieldsFor, known:known,
     create:create, decorate:decorate, scan:scan, refresh:refresh, refreshAll:refreshAll,
-    open:open, submit:submit, cancel:cancel, readValues:readValues,
+    open:open, submit:submit, cancel:cancel, readValues:readValues, reveal:reveal,
     openPop:openPop, closePop:closePop, install:install
   };
   global.QuickCreate = QuickCreate;

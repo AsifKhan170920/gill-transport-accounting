@@ -29,15 +29,16 @@ const PALETTE = [
       {f:'supBalance', label:'Supplier ledger closing balance', type:'money'}
   ], custom:'Add custom field in supplier form' },
   { key:'bank', name:'Bank Information', icon:'🏦', items:[
-      {f:'bankName',   label:'Bank name',        type:'text'},
-      {f:'bankCode',   label:'Bank code',        type:'text'},
-      {f:'bankIBAN',   label:'Bank IBAN number', type:'text'},
-      {f:'bankAcctNo', label:'Bank Account no.', type:'text'}
+      {f:'bankName',   label:'Name',             type:'text'},
+      {f:'bankCode',   label:'Code',             type:'text'},
+      {f:'bankIBAN',   label:'IBAN',             type:'text'},
+      {f:'bankAcctNo', label:'Account number',   type:'text'}
   ], custom:'Add custom field in bank' },
   { key:'employee', name:'Employees Information', icon:'🧑‍💼', items:[
       {f:'empName',    label:'Name',                   type:'text'},
-      {f:'empCode',    label:'code',                   type:'text'},
-      {f:'empAddress', label:'address',                type:'textarea'},
+      {f:'empCode',    label:'Code',                   type:'text'},
+      {f:'empEmail',   label:'Email',                  type:'email'},
+      {f:'empAddress', label:'Address',                type:'textarea'},
       {f:'empBalance', label:'ledger closing balance', type:'money'}
   ], custom:'Add custom field in employee form' },
   { key:'item', name:'Item Information', icon:'📦', items:[
@@ -46,7 +47,7 @@ const PALETTE = [
       {f:'itemUnit',        label:'Unit name',          type:'text'},
       {f:'itemSellPrice',   label:'Selling price',      type:'money'},
       {f:'itemPurchPrice',  label:'Purchase price',     type:'money'},
-      {f:'itemQty',         label:'Available quantity', type:'number'},
+      {f:'itemQty',         label:'Starting quantity',  type:'number'},
       {f:'itemOpeningCost', label:'Starting cost (total available)', type:'money'},
       {f:'itemClosingCost', label:'Closing cost',       type:'money'}
   ], custom:'Add custom field in item form' },
@@ -123,7 +124,7 @@ const WORDS=(src)=>['general','custom',{label:'Amount in words',var:'amounts_in_
 const BAL=()=>['general','custom',{label:'Balance check (Dr vs Cr)',var:'journal_balance',inputMode:'balance',balDebit:'amountNoTax',balCredit:'totalWithTax',widthMode:'custom',widthVal:62,widthUnit:'%'}];
 const STARTERS = {
   salesInv:    { title:'Sales Invoice',     fields:[['general','date',DATEW],['general','reference',REF('SINV')],['customer','custName',NAME_DD('customer')],['customer','custTRN',LINKED()],['customer','custAddress',LINKED(30)]], lines:INV_LINES, tail:[BANKDET, WORDS()] },
-  purchInv:    { title:'Purchase Invoice',  fields:[['general','date',DATEW],['general','reference',REF('PINV')],['supplier','supName',NAME_DD('supplier')],['supplier','supTRN',LINKED()],['supplier','supAddress',LINKED(30)]], lines:INV_LINES, tail:[BANKDET, WORDS()] },
+  purchInv:    { title:'Purchase Invoice',  fields:[['general','date',DATEW],['general','reference',REF('PINV')],['general','dueDate',DATEW],['supplier','supName',NAME_DD('supplier')],['supplier','supTRN',LINKED()],['supplier','supAddress',LINKED(30)]], lines:INV_LINES, tail:[BANKDET, WORDS()] },
   salesQuotes: { title:'Sales Quotation',   fields:[['general','date',DATEW],['general','reference',REF('SQT')],['customer','custName',NAME_DD('customer')],['customer','custAddress',LINKED(30)]], lines:INV_LINES, tail:[WORDS()] },
   purchQuotes: { title:'Purchase Quotation',fields:[['general','date',DATEW],['general','reference',REF('PQT')],['supplier','supName',NAME_DD('supplier')],['supplier','supAddress',LINKED(30)]], lines:INV_LINES, tail:[WORDS()] },
   salesOrders: { title:'Sales Order',       fields:[['general','date',DATEW],['general','reference',REF('SO')],['customer','custName',NAME_DD('customer')],['customer','custAddress',LINKED(30)]], lines:INV_LINES, tail:[WORDS()] },
@@ -138,9 +139,9 @@ const STARTERS = {
   goodsRec:    { title:'Goods Receipt',     fields:[['general','date',DATEW],['general','reference',REF('GRN')],['supplier','supName',NAME_DD('supplier')],['supplier','supAddress',LINKED(30)]], lines:['items','description','qty'] },
   payslips:    { title:'Payslip',           fields:[['general','date',DATEW],['employee','empName',NAME_DD('employee',40)],['employee','empCode',CW(20)]], lines:['description',['amountNoTax',{cellMode:'input',formula:'',label:'Amount'}]], tail:[WORDS()] },
   depreciation:{ title:'Depreciation Entry', fields:[['general','date',Object.assign({label:'As of date'},DATEW)],['general','reference',REF('DEP')],['general','custom',{var:'depMethod',label:'Depreciation method',inputType:'select',options:['Straight-line','Reducing balance'],defaultValue:'Straight-line',widthMode:'custom',widthVal:45,widthUnit:'%'}]], lines:[['custom',{label:'Fixed asset',cellMode:'dropdown',dropSource:'fixedAsset',var:'asset',w:190,wUnit:'px'}],['custom',{label:'Cost (ledger)',cellMode:'input',num:true,ro:true,var:'cost',w:120,wUnit:'px'}],['custom',{label:'Accumulated dep. (ledger)',cellMode:'input',num:true,ro:true,var:'accDep',w:150,wUnit:'px'}],['custom',{label:'Depreciation rate %',cellMode:'input',num:true,var:'depRate',w:120,wUnit:'px'}],['custom',{label:'Depreciation expense',cellMode:'input',num:true,ro:true,var:'depExpense',w:150,wUnit:'px'}],['custom',{label:'WDV',cellMode:'input',num:true,ro:true,var:'wdv',w:120,wUnit:'px'}]], tail:[WORDS('tot:depExpense')] },
-  customers:   { title:'Customer',          fields:[['customer','custName'],['customer','custCode'],['customer','custTRN'],['customer','custEmail'],['customer','custMobile'],['customer','custAddress'],['customer','custBalance']], lines:null },
-  suppliers:   { title:'Supplier',          fields:[['supplier','supName'],['supplier','supCode'],['supplier','supTRN'],['supplier','supEmail'],['supplier','supMobile'],['supplier','supAddress'],['supplier','supBalance']], lines:null },
-  employees:   { title:'Employee',          fields:[['employee','empName'],['employee','empCode'],['employee','empAddress'],['employee','empBalance']], lines:null },
+  customers:   { title:'Customer',          fields:[['customer','custName'],['customer','custCode'],['customer','custTRN'],['customer','custEmail'],['customer','custMobile'],['customer','custAddress']], lines:null },
+  suppliers:   { title:'Supplier',          fields:[['supplier','supName'],['supplier','supCode'],['supplier','supTRN'],['supplier','supEmail'],['supplier','supMobile'],['supplier','supAddress']], lines:null },
+  employees:   { title:'Employee',          fields:[['employee','empName'],['employee','empCode'],['employee','empEmail'],['employee','empAddress']], lines:null },
   bankCash:    { title:'Bank & Cash Account',fields:[['bank','bankName'],['bank','bankCode'],['bank','bankIBAN'],['bank','bankAcctNo']], lines:null },
   inventory:   { title:'Inventory Item',    fields:[['item','itemName'],['item','itemCode'],['item','itemUnit'],['item','itemQty'],['item','itemOpeningCost'],['item','itemSellPrice'],['item','itemPurchPrice']], lines:null },
   fixedAssets: { title:'Fixed Asset',       fields:[['fixedAsset','faName',{widthMode:'custom',widthVal:45,widthUnit:'%'}],['fixedAsset','faCode',{widthMode:'custom',widthVal:25,widthUnit:'%'}],['fixedAsset','faCost',{row:2,widthMode:'custom',widthVal:30,widthUnit:'%'}],['fixedAsset','faDate',{row:2,widthMode:'custom',widthVal:25,widthUnit:'%'}],['fixedAsset','faDepRate',{row:3,widthMode:'custom',widthVal:25,widthUnit:'%'}],['fixedAsset','faAccDep',{row:3,widthMode:'custom',widthVal:35,widthUnit:'%'}]], lines:null },

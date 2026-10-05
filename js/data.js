@@ -75,17 +75,56 @@ const INV_FORM_PURCH=[{key:'issueDate',label:'Issue date',type:'date',req:1},{ke
 const INV_COLS=(party,amtLabel)=>[{key:'issueDate',label:'Issue date',kind:'date'},{key:'reference',label:'Reference',kind:'text'},
   {key:party,label:party==='supplier'?'Supplier':'Customer',kind:'text'},{key:'description',label:'Description',kind:'text'},
   {key:'total',label:amtLabel||'Amount',kind:'money',r:1}];
+/* Bank & Cash list figures (calculated columns). Pending = documents flagged pending / not cleared;
+   uncategorized = lines with no account or posted to Suspense. Read-only: nothing here posts. */
+function bankIbanOf(r){ if(!r) return ''; var v=r.iban; if(typeof v==='string'&&v.trim()) return v.trim(); return String(r.ibanNo||r.bankIBAN||'').trim(); }
+function bankFigures(b,r){ var out={control:'',division:'',uncatIn:0,uncatOut:0,cleared:0,pendIn:0,pendOut:0,available:'',lastRec:'',timestamp:''}; if(!b||!r) return out;
+  var R=b.records||{}, coa=b.coa||[]; var match=function(ref){ try{ return bankMatch(ref,r); }catch(e){ return ref===r.name; } };
+  var ctl=r.controlAccount?coa.find(function(n){ return n.id===r.controlAccount; }):null; if(!ctl) ctl=coa.find(function(n){ return n.cashControl; }); out.control=ctl?(ctl.name||''):'Cash & cash equivalents';
+  if(r.division){ var dv=(b.divisions||[]).find(function(d){ return d.id===r.division||d.name===r.division; }); out.division=dv?dv.name:String(r.division); }
+  var susp=coa.find(function(n){ return n.type==='account'&&/^suspense$/i.test(n.name||''); });
+  var uncat=function(doc){ var s=0; (doc.lines||[]).forEach(function(ln){ var a=ln.account||ln.accountName||ln.accounts||''; if(!a||(susp&&(a===susp.id||a===susp.name))) s+=Number(ln.amount)||0; }); return s; };
+  var isPend=function(doc){ return doc.pending===true||doc.cleared===false||String(doc.status||'').toLowerCase()==='pending'; };
+  (R.receipts||[]).forEach(function(d){ if(!match(d.receivedIn)) return; out.uncatIn+=uncat(d); if(isPend(d)) out.pendIn+=Number(d.amount)||0; });
+  (R.payments||[]).forEach(function(d){ if(!match(d.paidFrom)) return; out.uncatOut+=uncat(d); if(isPend(d)) out.pendOut+=Number(d.amount)||0; });
+  (R.iat||[]).forEach(function(d){ if(!isPend(d)) return; if(match(d.receivedIn)) out.pendIn+=Number(d.amount)||0; if(match(d.paidFrom)) out.pendOut+=Number(d.amount)||0; });
+  var actual=0; try{ actual=bankActual(b,r); }catch(e){}
+  out.cleared=Math.round((actual-out.pendIn+out.pendOut)*100)/100;
+  var on=r.creditLimitOn===true||r.creditLimitOn==='1'||r.creditLimitOn===1; if(on) out.available=Math.round((actual+(Number(r.creditLimit)||0))*100)/100;
+  (R.bankRec||[]).forEach(function(x){ if(match(x.account)||match(x.bankName)){ var d=String(x.date||x.issueDate||'').slice(0,10); if(d>out.lastRec) out.lastRec=d; } });
+  var ts=''; (b.activity||[]).forEach(function(a){ if(a&&a.key==='bankCash'&&String(a.recId)===String(r.id)&&String(a.ts||'')>ts) ts=a.ts; });
+  if(!ts&&Number(r.id)>1e12) try{ ts=new Date(Number(r.id)).toISOString(); }catch(e){}
+  out.timestamp=ts?ts.slice(0,16).replace('T',' '):'';
+  return out; }
 const REG = {
+  /* Bank & Cash: Manager's column set and order (FIX_SPEC 33-35). `def:1` = shown by default
+     (Name, Cleared balance, Actual balance); the rest are offered in Edit columns. Form fields
+     marked `noCol:1` are settings, not columns. The IBAN is stored under `iban` (string); the
+     old designer keys bankIBAN / ibanNo are migrated forward by js/forms-fixes.js. */
   bankCash:{label:'Bank and Cash Accounts', singular:'Bank or Cash Account', newLabel:'New Bank or Cash Account',
-    columns:[{key:'name',label:'Name',kind:'text'},{key:'balance',label:'Actual balance',kind:'money',r:1,color:'blue',ledger:1,calc:r=>bankActual(App.curBiz(),r)}],
-    form:[{key:'name',label:'Name',type:'text',req:1},{key:'code',label:'Code',type:'text'},
-      {key:'balance',label:'Starting balance',type:'money'},
-      {key:'iban',label:'International Bank Account Number (IBAN)',type:'check'},
-      {key:'ibanNo',label:'IBAN',type:'text',showIf:'iban'},
-      {key:'pending',label:'Can have pending transactions',type:'check'},
-      {key:'creditLimitOn',label:'Credit limit',type:'check'},
-      {key:'creditLimit',label:'Credit limit amount',type:'money',showIf:'creditLimitOn'},
-      {key:'inactive',label:'Inactive',type:'check'}],
+    columns:[{key:'code',label:'Code',kind:'text'},
+      {key:'name',label:'Name',kind:'text',def:1},
+      {key:'controlAccount',label:'Control account',kind:'text',calc:r=>bankFigures(App.curBiz(),r).control},
+      {key:'division',label:'Division',kind:'text',calc:r=>bankFigures(App.curBiz(),r).division},
+      {key:'uncatReceipts',label:'Uncategorized Receipts',kind:'money',r:1,calc:r=>bankFigures(App.curBiz(),r).uncatIn},
+      {key:'uncatPayments',label:'Uncategorized Payments',kind:'money',r:1,calc:r=>bankFigures(App.curBiz(),r).uncatOut},
+      {key:'cleared',label:'Cleared balance',kind:'money',r:1,def:1,calc:r=>bankFigures(App.curBiz(),r).cleared},
+      {key:'pendingDeposits',label:'Pending deposits',kind:'money',r:1,calc:r=>bankFigures(App.curBiz(),r).pendIn},
+      {key:'pendingWithdrawals',label:'Pending withdrawals',kind:'money',r:1,calc:r=>bankFigures(App.curBiz(),r).pendOut},
+      {key:'balance',label:'Actual balance',kind:'money',r:1,color:'blue',ledger:1,def:1,calc:r=>bankActual(App.curBiz(),r)},
+      {key:'availableCredit',label:'Available credit',kind:'money',r:1,calc:r=>bankFigures(App.curBiz(),r).available},
+      {key:'lastBankRec',label:'Last Bank Reconciliation',kind:'date',calc:r=>bankFigures(App.curBiz(),r).lastRec},
+      {key:'timestamp',label:'Timestamp',kind:'text',calc:r=>bankFigures(App.curBiz(),r).timestamp},
+      {key:'iban',label:'IBAN',kind:'text',calc:r=>bankIbanOf(r)}],
+    defaultCols:['name','cleared','balance'],
+    form:[{key:'name',label:'Name',type:'text',req:1,row:'nameCode'},
+      {key:'code',label:'Code',type:'text',row:'nameCode',ph:'Optional',w:'140px'},
+      {key:'hasIban',label:'International Bank Account Number (IBAN)',type:'check',noCol:1},
+      {key:'iban',label:'IBAN',type:'text',showIf:'hasIban'},
+      {key:'pending',label:'Can have pending transactions',type:'check',noCol:1},
+      {key:'creditLimitOn',label:'Credit limit',type:'check',noCol:1},
+      {key:'creditLimit',label:'Credit limit',type:'money',showIf:'creditLimitOn',noCol:1},
+      {key:'inactive',label:'Inactive',type:'check',noCol:1}],
     totalCol:'balance', extraFoot:['Import bank statement']},
 
   receipts:{label:'Receipts', singular:'Receipt', newLabel:'New Receipt',
@@ -129,8 +168,7 @@ const REG = {
     form:[{key:'name',label:'Customer name',type:'text',req:1},{key:'code',label:'Code',type:'text'},
       {key:'address',label:'Address',type:'textarea'},
       {key:'phone',label:'Phone number',type:'text'},{key:'email',label:'Email',type:'text'},
-      {key:'trn',label:'TRN number',type:'text'},
-      {key:'balance',label:'Starting balance',type:'money'}],
+      {key:'trn',label:'TRN number',type:'text'}],
     totalCol:'balance'},
 
   salesQuotes:{label:'Sales Quotes', singular:'Sales Quote', newLabel:'New Sales Quote',
@@ -165,8 +203,7 @@ const REG = {
     form:[{key:'name',label:'Supplier name',type:'text',req:1},{key:'code',label:'Code',type:'text'},
       {key:'address',label:'Address',type:'textarea'},
       {key:'phone',label:'Phone number',type:'text'},{key:'email',label:'Email',type:'text'},
-      {key:'trn',label:'TRN number',type:'text'},
-      {key:'balance',label:'Starting balance',type:'money'}],
+      {key:'trn',label:'TRN number',type:'text'}],
     totalCol:'balance'},
 
   purchQuotes:{label:'Purchase Quotes', singular:'Purchase Quote', newLabel:'New Purchase Quote',
