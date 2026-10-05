@@ -1235,7 +1235,9 @@ const App = {
     var trn=prec.trn?('TRN: '+e(prec.trn)):''; var phone=prec.phone?('Tel: '+e(prec.phone)):''; var email=prec.email?e(prec.email):'';
     return [addrH,trn,phone,email].filter(Boolean).join('<br>'); },
   voucherDoc(b,c,rec,opts){ const d=b.details||{}; const isCash=c.lines&&c.lines.kind==='cash'; const isInv=c.lines&&c.lines.kind==='invoice'; const e=s=>this.esc(s);
-    const SHOW=(k,ck)=>this.cfgShow(b,k,ck); const ed=!!(opts&&opts.edit); const selK=(opts&&opts.sel)||null;
+    const _off={}; (Array.isArray(rec.printOff)?rec.printOff:[]).forEach(v=>{ _off[v]=1; }); const PO=(...vs)=>!(opts&&opts.edit)&&vs.some(v=>_off[v]);
+    const _recHide={date:['f:date'],reference:['f:reference'],dueDate:['f:dueDate'],party:['f:custName','f:supName'],partyAddress:['f:custAddress','f:supAddress'],description:['f:narration','f:description'],bankDetails:['f:bank_accounts_detail']};
+    const SHOW=(k,ck)=>this.cfgShow(b,k,ck)&&!(_recHide[ck]&&PO(..._recHide[ck])); const ed=!!(opts&&opts.edit); const selK=(opts&&opts.sel)||null;
     const co=e(d.legalName||b.name||''); const addr=(d.address||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>');
     const phone=(d.phone||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>'); const email=d.email?e(d.email):''; const trn=d.taxNumber?'TRN: '+e(d.taxNumber):'';
     const logo=d.logo?'<img class="vch-logo" src="'+e(d.logo)+'" alt="">':'';
@@ -1247,7 +1249,7 @@ const App = {
       const title=(rec.customTitleOn&&rec.customTitle)?rec.customTitle:(c.singular||'Invoice');
       const party=rec.customer||rec.supplier||'';
       const billing=(rec.billingAddress||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>');
-      const showTax=rec.showTaxCol!==false; const lns=rec.lines||[];
+      const showTax=rec.showTaxCol!==false; const lns=(rec.lines||[]).filter(l=>!(l&&l.rounding));
       const hasItem=lns.some(l=>l.item&&String(l.item).trim());
       const hasDesc=lns.some(l=>l.desc&&String(l.desc).trim());
       const firstHdr=hasItem?'Item':(hasDesc?'Description':'Account');
@@ -1260,10 +1262,10 @@ const App = {
         const sub=(it&&de)?'<div class="iv-sub">'+e(de)+'</div>':''; return e(main)+sub; };
       const colDefs=[
         {k:'first',th:firstHdr,align:'left',present:true,cell:firstCell,sum:''},
-        {k:'qty',th:unitHdr,align:'right',present:has('qty'),cell:ln=>{ const q=this.parseNum(ln.qty); return q?e(this.numStr(q)):''; },sum:e(this.numStr(qtySum))},
-        {k:'price',th:'Unit price',align:'right',present:has('price'),cell:ln=>((ln.price!==''&&ln.price!=null)?this.money(ln.price):''),sum:''},
-        {k:'tax',th:'Tax',align:'right',present:hasTax,cell:ln=>(ln.tax?e((this.taxRate(ln.tax)||0)+'%'):''),sum:''},
-        {k:'taxAmt',th:'Tax Amount',align:'right',present:showTax&&hasTax,cell:ln=>this.money(ln.taxAmt),sum:this.money(taxSum)},
+        {k:'qty',th:unitHdr,align:'right',present:has('qty')&&rec.colQty!==false&&!PO('c:qty'),cell:ln=>{ const q=this.parseNum(ln.qty); return q?e(this.numStr(q)):''; },sum:e(this.numStr(qtySum))},
+        {k:'price',th:'Unit price',align:'right',present:has('price')&&!PO('c:price'),cell:ln=>((ln.price!==''&&ln.price!=null)?this.money(ln.price):''),sum:''},
+        {k:'tax',th:'Tax',align:'right',present:hasTax&&!PO('c:taxRate'),cell:ln=>{ if(!ln.tax&&!ln.taxCode) return ''; const _r=this.taxRate(ln.taxCode||ln.tax)||(ln.taxRate!==''&&ln.taxRate!=null?Number(ln.taxRate):0)||(isNaN(Number(ln.tax))?0:Number(ln.tax)); return e(_r+'%'); },sum:''},
+        {k:'taxAmt',th:'Tax Amount',align:'right',present:showTax&&hasTax&&!PO('c:taxAmount'),cell:ln=>this.money(ln.taxAmt),sum:this.money(taxSum)},
         {k:'total',th:'Total',align:'right',present:true,cell:ln=>this.money(ln.amount),sum:this.money(amtSum)}
       ];
       if(rec.colLineNum) colDefs.unshift({k:'num',th:'#',align:'left',present:true,cell:(ln,idx)=>String(idx+1),sum:''});
@@ -1277,9 +1279,12 @@ const App = {
       const tRow=(lbl,val,g)=>'<div class="iv-totrow'+(g?' iv-totrow-g':'')+'"><span>'+e(lbl)+'</span><span>'+this.money(val)+'</span></div>';
       let totRows; if(rec.taxInclusive){ totRows=(Number(rec.tax)?tRow('Includes '+this.invRateLabel(rec),rec.tax,0):'')+tRow('Total',rec.total,1); }
         else { totRows=tRow('Subtotal',rec.subtotal,0)+(Number(rec.tax)?tRow('Tax',rec.tax,0):'')+tRow('Total',rec.total,1); }
+      if(Number(rec.roundingAmt)) totRows=totRows.replace(/(<div class="iv-totrow iv-totrow-g">)/, tRow('Rounding',rec.roundingAmt,0)+'$1');
+      if(Number(rec.withholdingAmt)) totRows+=tRow('Withholding tax',-Number(rec.withholdingAmt),0);
+      if((key==='salesInv'||key==='purchInv')&&!rec.hideBalanceDue&&!PO('f:balanceDue')){ const _bd=(rec.balanceDue!=null&&rec.balanceDue!=='')?Number(rec.balanceDue):(Number(rec.total)||0)-(Number(rec.withholdingAmt)||0); totRows+=tRow('Balance due',_bd,1); }
       const totalsBox='<div class="iv-totbox2">'+totRows+'</div>';
       const table='<div class="iv-twrap"><table class="iv-table"><thead>'+thr+'</thead><tbody>'+rowsH+coltot+'</tbody></table></div>';
-      const showWords=(rec.amountInWords!==false);
+      const showWords=(rec.amountInWords!==false)&&!PO('f:amounts_in_word');
       const wordsBox=showWords?'<div class="iv-aw2"><span class="iv-aw-lbl">Amount in words</span><span class="iv-aw-val">'+e(this.amountInWords(rec.total,(d.currency||b.currency||b.baseCurrency||'')))+'</span></div>':'';
       const belowH='<div class="iv-belowtbl"><div class="iv-bl-left">'+wordsBox+'</div><div class="iv-bl-right">'+totalsBox+'</div></div>';
       const trnLine=(d.taxNumber&&SHOW(key,'trn'))?'TRN No: '+e(d.taxNumber):'';
@@ -1290,7 +1295,8 @@ const App = {
       if(d.footer&&SHOW(key,'footer')) cf+='<div class="iv-cfblock">'+e(d.footer).split('\n').join('<br>')+'</div>';
       const cfWrap=cf?'<div class="iv-cf">'+cf+'</div>':'';
       const showBank=(!isP)&&(rec.printBankDetails==null||rec.printBankDetails)&&SHOW(key,'bankDetails');
-      const bankBox=showBank?'<div class="iv-bankbox"><div class="iv-bb-lbl">Bank Details:</div><div class="iv-bb-area">'+(rec.bankDetails?e(rec.bankDetails).split('\n').join('<br>'):'')+'</div></div>':'';
+      const _bankTxt=String(rec.bankDetails||rec.bank_accounts_detail||'').trim();
+      const bankBox=(showBank&&(_bankTxt||ed))?'<div class="iv-bankbox"><div class="iv-bb-lbl">Bank Details:</div><div class="iv-bb-area">'+(_bankTxt?e(_bankTxt).split('\n').join('<br>'):'')+'</div></div>':'';
       const signBox='<div class="iv-sign"><div class="iv-sign-box"><div class="iv-sign-top">For '+co+'</div><div class="iv-sign-bot">Sign and stamp</div></div><div class="iv-sign-box"><div class="iv-sign-top">'+(isP?'For supplier':'For customer')+'</div><div class="iv-sign-bot">Sign and stamp</div></div></div>';
       const st=this.invStatus(rec); const stcls=st==='Overdue'?'neg':(st==='Paid'?'pos':'neu');
       const badge=(showStatus&&SHOW(key,'status')&&rec.printStatus===true)?'<div class="iv-status"><span class="'+stcls+'">'+e(st.toUpperCase())+'</span></div>':'';
@@ -1303,8 +1309,9 @@ const App = {
         return h; };
       const fieldsH=(SHOW(key,'date')?'<dt>'+dateLbl+'</dt><dd>'+e(this.fmtDateUS(rec.issueDate||rec.date))+'</dd>':'')+
         (rec.reference&&SHOW(key,'reference')?'<dt>'+numLbl+'</dt><dd>'+e(rec.reference)+'</dd>':'')+
-        (!rec.hideDueDate&&SHOW(key,'dueDate')?'<dt>Due Date</dt><dd>'+(rec.dueDate?e(this.fmtDateUS(rec.dueDate)):'-')+'</dd>':'');
-      const partyName=SHOW(key,'party')?e(party):''; const partyAddr=SHOW(key,'partyAddress')?this._partyBlock(b,key,rec):'';
+        (()=>{ if(rec.hideDueDate||!SHOW(key,'dueDate')) return ''; const isQ=(key==='salesQuotes'||key==='purchQuotes'); const dv=isQ?(rec.validUntil||rec.expiryDate||rec.dueDate):rec.dueDate;
+          if(!dv&&!(key==='salesInv'||key==='purchInv')) return ''; return '<dt>'+(isQ?'Valid until':'Due Date')+'</dt><dd>'+(dv?e(this.fmtDateUS(dv)):'-')+'</dd>'; })();
+      const partyName=SHOW(key,'party')?e(party):''; let partyAddr=SHOW(key,'partyAddress')?this._partyBlock(b,key,rec):''; if(PO('f:custTRN','f:supTRN')) partyAddr=partyAddr.split('<br>').filter(l=>l.indexOf('TRN: ')!==0).join('<br>');
       const logoImg=(d.logo&&SHOW(key,'logo'))?'<img src="'+e(d.logo)+'" alt="">':'';
       const headerH=this._ivHeader(title,logoImg,co,bizLines);
       const metaH='<div class="iv-meta"><address class="iv-rinfo"><div class="iv-party-lbl">'+(isP?'SUPPLIER':'CUSTOMER')+'</div><strong>'+partyName+'</strong>'+partyAddr+'</address><div class="iv-mdiv"></div><dl class="iv-fields">'+fieldsH+'</dl></div>';
