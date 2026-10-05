@@ -321,7 +321,8 @@
       if(!hits.length) return; var c=reg()[key];
       out.push({ group:c.label||L[key], key:key, total:hits.length, items:hits.slice(0,6).map(function(r){
         var party=r.customer||r.supplier||r.paidBy||r.payee||r.employee||'', amt=(r.total!=null&&r.total!=='')?r.total:r.amount, dt=r.issueDate||r.date||'';
-        return { id:r.id, title:recTitle(key,r)||c.singular, sub:[dt?fmtD(dt):'', party, (r.description&&r.description!==recTitle(key,r))?r.description:'', (amt!=null&&amt!=='')?money(amt):''].filter(Boolean).join(' · ') }; }) }); });
+        var ttl=(!r.name&&!blank(r.reference))?(c.singular+' '+r.reference):(recTitle(key,r)||c.singular); if(party===ttl) party='';
+        return { id:r.id, title:ttl, sub:[dt?fmtD(dt):'', party, (r.description&&r.description!==ttl)?r.description:'', (amt!=null&&amt!==''&&Number(amt))?money(amt):''].filter(Boolean).join(' · ') }; }) }); });
     return out;
   }
   function fmtD(v){ var A=app(); try{ return A.fmtDate ? A.fmtDate(v) : v; }catch(e){ return v; } }
