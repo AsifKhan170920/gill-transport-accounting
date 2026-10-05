@@ -733,7 +733,7 @@
     'qty in': ['qin', 'num'], 'qty out': ['qout', 'num'], 'qty balance': ['qbal', 'num'],
     'cost in': ['cin', 'money'], 'cost out': ['cout', 'money'], 'cost balance': ['cbal', 'money'],
     'acquisition cost': ['cost', 'money'], 'depreciation': ['dep', 'money'], 'book value': ['book', 'money'],
-    'account': ['account', 'text'], 'sub-account': ['name', 'text']
+    'account': ['account', 'text']
   };
   var FIELD_KIND = {}; Object.keys(LEDGER_FIELDS).forEach(function (k) { FIELD_KIND[LEDGER_FIELDS[k][0]] = LEDGER_FIELDS[k][1]; });
   App.sortLedgerRows = function (rows, ctx) {
@@ -769,6 +769,8 @@
     var ctx = App._sortCtx(); if (!ctx || ctx.indexOf('ledger:') !== 0) return;
     var st = App.sortState(ctx);
     var ths = root.querySelectorAll('#ledgerBody table.reg-tbl > thead th');
+    /* the GL sub-account summary is not a ledger */
+    if (Array.prototype.some.call(ths, function (th) { return String(th.textContent || '').trim() === 'Sub-account'; })) return;
     Array.prototype.forEach.call(ths, function (th, i) {
       if (th.getAttribute('data-ls') === '1') return;
       var txt = String(th.textContent || '').trim();
@@ -829,7 +831,7 @@
       var m = document.getElementById('wsMain'); if (!m) return false;
       new MutationObserver(function () {
         if (pending) return; pending = true;
-        (win.requestAnimationFrame || setTimeout)(function () { pending = false; App._decorateMain(); });
+        setTimeout(function () { pending = false; App._decorateMain(); }, 0);
       }).observe(m, { childList: true, subtree: true });
       return true;
     };
