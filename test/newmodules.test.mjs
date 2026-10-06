@@ -327,7 +327,7 @@ describe('entry forms', () => {
   const starters = [...block.matchAll(/^\s{2}([A-Za-z]+):\s*\{/gm)].map(m => m[1]);
 
   test('every register has a starter form', () => {
-    const missing = Object.keys(REG).filter(k => !starters.includes(k));
+    const missing = Object.keys(REG).filter(k => !REG[k].ownPage && !starters.includes(k));
     assert.deepEqual([...missing], []);
   });
 
@@ -340,7 +340,7 @@ describe('entry forms', () => {
 
   test('every register is offered in the form designer’s document list', () => {
     const docs = [...src.matchAll(/\{k:'([A-Za-z]+)',l:'/g)].map(m => m[1]);
-    const missing = Object.keys(REG).filter(k => !docs.includes(k));
+    const missing = Object.keys(REG).filter(k => !REG[k].ownPage && !docs.includes(k));
     assert.deepEqual([...missing], []);
   });
 });

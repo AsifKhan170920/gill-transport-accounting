@@ -18,7 +18,9 @@ const SIDEBAR = [
   ['📄','Debit Notes','debitNotes'],['📦','Goods Receipts','goodsRec'],['🏷️','Inventory Items','inventory'],
   ['🔀','Inventory Transfers','invTransfers'],['🗑️','Inventory Write-offs','invWriteOffs'],
   ['🏭','Production Orders','production'],['🧷','Non-inventory Items','nonInvItems'],
-  ['🧑','Employees','employees'],['💵','Payslips','payslips'],['🏗️','Fixed Assets','fixedAssets'],
+  ['🧑','Employees','employees'],['💵','Payslips','payslips'],
+  ['💼','Payroll','payroll'],
+  ['🏗️','Fixed Assets','fixedAssets'],
   ['📉','Depreciation Entries','depreciation'],
   ['💡','Intangible Assets','intangibles'],['📐','Amortization Entries','amortization'],
   ['🏛️','Capital Accounts','capital'],['⭐','Special Accounts','special'],
@@ -40,7 +42,7 @@ const SIDEBAR_GROUPS = [
                   'Debit Notes','Goods Receipts','Expense Claims']],
   ['Inventory',  ['Inventory Items','Inventory Transfers','Inventory Write-offs',
                   'Production Orders','Non-inventory Items']],
-  ['Payroll',    ['Employees','Payslips']],
+  ['Payroll',    ['Employees','Payslips','Payroll']],
   ['Assets',     ['Fixed Assets','Depreciation Entries','Intangible Assets',
                   'Amortization Entries','Investments']],
   ['Accounting', ['Capital Accounts','Special Accounts','Journal Entries']],
@@ -265,6 +267,11 @@ const REG = {
     form:[{key:'date',label:'Date',type:'date',req:1},{key:'reference',label:'Reference',type:'text'},
       {key:'employee',label:'Employee',type:'ref',from:'employees'},{key:'description',label:'Description',type:'text'}],
     lines:{kind:'payslip'}, totalCol:'netPay', extraFoot:['Payslips - Lines']},
+
+  /* monthly payroll runs. ownPage: js/payroll.js draws the whole tab (no designer form) */
+  payroll:{label:'Payroll', singular:'Payroll run', newLabel:'Run payroll', ownPage:1,
+    columns:[{key:'month',label:'Month',kind:'text'},{key:'date',label:'Date',kind:'date'},{key:'description',label:'Description',kind:'text'}],
+    form:[]},
 
   fixedAssets:{label:'Fixed Assets', singular:'Fixed Asset', newLabel:'New Fixed Asset',
     columns:[{key:'name',label:'Name',kind:'text'},{key:'acqDate',label:'Acquisition date',kind:'date'},

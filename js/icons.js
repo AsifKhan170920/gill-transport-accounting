@@ -94,7 +94,7 @@
     'Purchase Invoices': 'invoice', 'Debit Notes': 'creditNote', 'Goods Receipts': 'box',
     'Inventory Items': 'tag', 'Inventory Transfers': 'shuffle', 'Inventory Write-offs': 'trash',
     'Production Orders': 'factory', 'Non-inventory Items': 'puzzle',
-    'Employees': 'users', 'Payslips': 'wallet',
+    'Employees': 'users', 'Payslips': 'wallet', 'Payroll': 'briefcase',
     'Fixed Assets': 'building', 'Depreciation Entries': 'trendDown',
     'Intangible Assets': 'lightbulb', 'Amortization Entries': 'scale',
     'Capital Accounts': 'landmark', 'Special Accounts': 'star',
