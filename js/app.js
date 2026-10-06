@@ -114,7 +114,7 @@ const App = {
           '<li><b>Create a business</b> — Businesses tab → <i>Add Business</i> → Create New Business.</li>'+
           '<li><b>Set it up</b> — open the business, then Settings → Business Details, Chart of Accounts, Tax Codes and Currencies.</li>'+
           '<li><b>Enter transactions</b> — pick a section in the sidebar (Receipts, Sales Invoices, …) and click the blue <i>New …</i> button.</li>'+
-          '<li><b>Design your documents</b> — Settings → Custom Theme → Form Formatting → pick a document to open the drag-and-drop Invoice Designer.</li>'+
+          '<li><b>Design your documents</b> — Settings → Custom Themes → Themes → create an HTML theme and choose it on the document View.</li>'+
           '<li><b>Report &amp; print</b> — Reports in the sidebar, or the Print / Save as PDF buttons on any document.</li>'+
         '</ol>'+
         '<p class="sub">Only the sections you use need to stay visible — hide the rest with <b>Customize</b> at the bottom of the sidebar.</p>'+

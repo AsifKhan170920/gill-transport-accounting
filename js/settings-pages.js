@@ -229,12 +229,9 @@
       'multiple': customFieldPage('Multiple Value Custom Fields', 'multi'), 'number': customFieldPage('Number Custom Fields', 'number'),
       'form-fields': { title: 'Fields added in the form designer', kind: 'legacy', fn: 'set_customFields' } } },
 
+    /* Form Formatting / Voucher / Record Forms / Accounting Forms / Statement Formatting
+       are hidden from the menu for now (App.openFmtCat still exists) */
     themes: { title: 'Custom Themes', kind: 'menu', items: {
-      'form': { title: 'Form Formatting (sales & purchase documents)', kind: 'link', action: "App.openFmtCat('form')" },
-      'voucher': { title: 'Voucher (receipts & payments)', kind: 'link', action: "App.openFmtCat('voucher')" },
-      'records': { title: 'Record Forms', kind: 'link', action: "App.openFmtCat('records')" },
-      'ledger': { title: 'Accounting Forms', kind: 'link', action: "App.openFmtCat('ledger')" },
-      'statement': { title: 'Statement Formatting', kind: 'link', action: "App.openFmtCat('statement')" },
       'html': { title: 'HTML Themes', kind: 'list', entity: 'Theme', newLabel: 'New Theme', store: 'customThemes',
         cols: [{ k: 'name', l: 'Name' }], fields: [T('name', 'Name', { req: 1 }), CODE('content', 'Content', { def: function () { return THEME_SKELETON; } })] } } },
 

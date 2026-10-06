@@ -155,10 +155,9 @@ describe('112 reverse charge and tax accounts in the general ledger', () => {
 });
 
 describe('118 themes', () => {
-  test('Themes list comes first in Custom Themes and keeps the designer categories', () => {
+  test('Custom Themes shows only the Themes list (designer categories hidden for now)', () => {
     const keys = Object.keys(SP.PAGES.themes.items);
-    assert.equal(keys[0], 'html');
-    for (const k of ['form', 'voucher', 'records', 'ledger', 'statement']) assert.ok(keys.includes(k), k);
+    assert.deepEqual(keys, ['html']);
     assert.equal(SP.PAGES.themes.items.html.title, 'Themes');
   });
   test('a theme renders a document through its placeholders and #doc', () => {
