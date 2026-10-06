@@ -63,7 +63,7 @@ describe('the entity registry', () => {
   });
 
   test('accounts and tax rates get their own schema', () => {
-    assert.deepEqual([...QC.fieldsFor('account')].map((f) => f.key), ['name', 'code', 'parent', 'balance']);
+    assert.deepEqual([...QC.fieldsFor('account')].map((f) => f.key), ['name', 'code', 'parent']);
     assert.deepEqual([...QC.fieldsFor('tax')].map((f) => f.key), ['name', 'rate']);
   });
 

@@ -67,8 +67,7 @@
     if(src==='account') return [
       { key:'name',    label:'Account Name',     type:'text',     req:1 },
       { key:'code',    label:'Code',             type:'text' },
-      { key:'parent',  label:'Group',            type:'coaGroup', req:1 },
-      { key:'balance', label:'Starting balance', type:'money' }];
+      { key:'parent',  label:'Group',            type:'coaGroup', req:1 }];   /* starting balances live in Settings > Starting Balances */
     if(src==='tax') return [
       { key:'name', label:'Tax Code Name', type:'text',   req:1 },
       { key:'rate', label:'Rate %',        type:'number', req:1 }];
