@@ -203,19 +203,19 @@
      balance down the page); a zero opening row is left out, and the footer
      count is the number of rows shown. The *Data functions keep their
      newest-first order because statements and copy-to-clipboard rely on it. */
-  var chrono = function(rows, isMoney){
+  var chrono = function(rows, isMoney, keepOrder){
     var open = [], rest = [];
     (rows||[]).forEach(function(r){ if(r.opening) open.push(r); else rest.push(r); });
     if(isMoney) open = open.filter(function(r){ return num(r.bal) || num(r.debit) || num(r.credit); });
-    return open.concat(rest.reverse());
+    return open.concat(keepOrder ? rest : rest.reverse());
   };
   A._lnChrono = chrono;
-  /* a column sort picked by the user (js/list-tools.js) already ordered the rows: keep it */
+  /* a column sort picked by the user (js/list-tools.js) already ordered the rows: keep that order (opening row still first) */
   var userSorted = function(app){ try{ var c = app._sortCtx && app._sortCtx(); return !!(c && app.sortState && app.sortState(c)); }catch(e){ return false; } };
   [['ledgerBodyHtml', 'ledgerData', true], ['glLedgerBodyHtml', 'glLedgerData', true], ['invLedgerBodyHtml', 'invLedgerData', false], ['faLedgerBodyHtml', 'faLedgerData', false]].forEach(function(t){
     wrap(t[0], function(orig, a){
       var self = this, dataFn = this[t[1]]; if(typeof dataFn!=='function') return orig.apply(this, a);
-      this[t[1]] = function(){ var d = dataFn.apply(self, arguments); if(d && d.rows){ d.rows = userSorted(self) ? d.rows : chrono(d.rows, t[2]); d.count = d.rows.length; } return d; };
+      this[t[1]] = function(){ var d = dataFn.apply(self, arguments); if(d && d.rows){ d.rows = chrono(d.rows, t[2], userSorted(self)); d.count = d.rows.length; } return d; };
       try{ return orig.apply(this, a); } finally{ this[t[1]] = dataFn; }
     });
   });
@@ -346,7 +346,9 @@
     if(typeof eng==='function'){ try{ var out = eng(b, key, rec);
       if(Array.isArray(out)) return out.map(function(r){ var ac = r.acctId!=null ? acctOf(b, r.acctId) : (r.account && typeof r.account==='object' ? r.account : null);
         return { account:r.accountName || (ac && ac.name) || String(r.account||''), acctId:ac ? ac.id : (r.acctId||null), sub:r.sub||'', debit:R2(r.debit), credit:R2(r.credit),
-          link:r.link || (r.bankId!=null ? { t:'ledger', key:'bankCash', id:r.bankId } : (ac ? { t:'gl', id:ac.id } : null)) }; }); }catch(e){} }
+          link:r.link || (r.bankId!=null ? { t:'ledger', key:'bankCash', id:r.bankId } : (ac ? { t:'gl', id:ac.id } : null)) }; })
+        /* debits first, then credits, each in posting order */
+        .map(function(r, i){ return [r, i]; }).sort(function(x, y){ return ((y[0].debit>0) - (x[0].debit>0)) || (x[1] - y[1]); }).map(function(x){ return x[0]; }); }catch(e){} }
     return this._lnDefaultPostings(b, key, rec);
   };
 
