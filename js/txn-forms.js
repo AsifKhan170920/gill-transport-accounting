@@ -122,6 +122,11 @@
       .map(function(r){ return { v:r.name, l:(App.codeName?App.codeName(r.code,r.name):((r.code?r.code+' - ':'')+r.name)) }; }) : [];
   }
   function uniq(a){ var s={}, o=[]; a.forEach(function(x){ if(x && !s[x]){ s[x]=1; o.push(x); } }); return o; }
+  /* extension points other modules register on TxnForms.ext (no-ops when nothing is registered):
+     ext.cols      [{id, th, show(b,t), cell(b,t,l,i), load(stateLine, storedLine), save(stateLine, outLine)}]
+     ext.onAccount [fn(b,t,line,i)] after a line's account changes;  ext.onDraw [fn(b,t)] after a redraw */
+  function extList(){ var x=(typeof TxnForms!=='undefined' && TxnForms.ext) || null; return (x && Array.isArray(x.cols)) ? x.cols : []; }
+  function hooks(n){ var x=(typeof TxnForms!=='undefined' && TxnForms.ext) || null; return (x && Array.isArray(x[n])) ? x[n] : []; }
 
   /* ---------------------------------------------------------------- tax codes */
   function taxCodes(b){ return (b&&b.taxCodes)||[]; }
@@ -222,6 +227,8 @@
                desc:(ln.desc!=null&&ln.desc!=='')?ln.desc:(ln.description||''), qty:(ln.qty==null?'':String(ln.qty)),
                price:price==null?'':price, discount:ln.discount==null?'':String(ln.discount), taxCode:code, division:ln.division||'' };
     });
+    /* extension columns (js/settings-fixes-a.js: billable to customer, line custom fields) read their stored value */
+    extList().forEach(function(ex){ if(ex.load) t.lines.forEach(function(tl,i){ try{ ex.load(tl, lines[i]||{}, b, t); }catch(e){} }); });
     if(!t.lines.length) t.lines=[blankLine(t)];
     /* data safety: the record has a total but its lines did not load — saving would set it to 0 */
     if(mode==='edit' && A && A.recordHeaderTotal){ var ht=A.recordHeaderTotal(key,rec); if(Math.abs(ht)>0.005 && Math.abs(totals(b,t).total)<0.005) t.loadBlocked='Line items did not load \u2014 saving would set the amount to 0.'; }
@@ -312,6 +319,7 @@
               net:c.net, amount:c.total, taxAmt:c.tax, tax:code, taxCode:code, taxRate:code?c.rate:'' };
       if(!blank(l.division)) o.division=l.division;
       if(l.item){ var it=itemRec(b,l.item); if(it && it.rec.unit) o.unit=it.rec.unit; }
+      extList().forEach(function(ex){ if(ex.save) try{ ex.save(l, o, b, t); }catch(e){} });
       return o;
     });
     if(inv && T.rnd){ var ra=acctByName(b,'Rounding'); var acct=ra?ra.id:(lines[0]?lines[0].account:'');
@@ -473,6 +481,7 @@
     if(t.colDiscount) C.push({k:'discount',th:'Discount'+(t.discType==='Exact amount'?'':' %'),num:1});
     if(inv) C.push({k:'sub',th:'Amount',num:1});
     if(divs) C.push({k:'division',th:'Division'});
+    extList().forEach(function(ex){ var on=false; try{ on=!!(ex.show && ex.show(b,t)); }catch(e){} if(on) C.push({k:'ext',th:ex.th,ex:ex}); });
     if(anyTax) C.push({k:'tax',th:'Tax Code'});
     if(t.showTaxCol && anyTax) C.push({k:'taxAmt',th:'Tax amount',num:1});
     C.push({k:'total',th:'Total',num:1});
@@ -511,6 +520,7 @@
               codes.map(function(x){ return '<option value="'+esc(x.name)+'"'+(x.name===l.taxCode?' selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+'</select>')+'</td>';
           case 'taxAmt': return '<td class="num tot" data-tax="'+i+'">'+pre+money(lc.tax)+'</td>';
           case 'total': return '<td class="num tot" data-tot="'+i+'">'+pre+money(lc.total)+'</td>';
+          case 'ext': var xh=''; try{ xh=c.ex.cell(b,t,l,i)||''; }catch(e){} return '<td class="tf-ext">'+pre+xh+'</td>';
         } return '<td>'+pre+'</td>'; }).join('')+
         '<td class="act"><button type="button" tabindex="-1" title="Move up" onclick="TxnForms._mv('+i+',-1)">↑</button><button type="button" tabindex="-1" title="Move down" onclick="TxnForms._mv('+i+',1)">↓</button><button type="button" tabindex="-1" title="Duplicate line" onclick="TxnForms._dup('+i+')">⧉</button><button type="button" tabindex="-1" title="Remove line" onclick="TxnForms._rm('+i+')">×</button></td></tr>'; }).join('');
     var incl=inv ? !!t.taxInclusive : !t.taxExclusive;
@@ -582,6 +592,7 @@
     var h=byId('txHead'), l=byId('txLines'), o=byId('txOpts');
     if(h) h.innerHTML=headHtml(b,TX); if(l) l.innerHTML=linesHtml(b,TX); if(o) o.innerHTML=optsHtml(b,TX);
     afterChange(true);
+    hooks('onDraw').forEach(function(fn){ try{ fn(b,TX); }catch(e){} });
   }
   var allocTimer=0;
   function afterChange(now){
@@ -632,6 +643,7 @@
       var pt=isInv(TX)?'customer':TX.partyType, party=isInv(TX)?TX.customer:TX.party;
       if(!l.sub && nc==='customers' && pt==='customer') l.sub=party||'';
       if(!l.sub && nc==='suppliers' && pt==='supplier') l.sub=party||''; }
+    hooks('onAccount').forEach(function(fn){ try{ fn(b,TX,l,i); }catch(e){} });
     draw(); }
   function pickItem(i,v){ var b=cur(), l=TX.lines[i], A=app(); l.item=v||'';
     var f=v?itemRec(b,v):null, buy=SPEC[TX.key].buy;
@@ -709,7 +721,8 @@
 
   /* -------------------------------------------------------- public API */
   var TxnForms = {
-    KEYS:KEYS, SPEC:SPEC, OPTS:OPTS,
+    KEYS:KEYS, SPEC:SPEC, OPTS:OPTS, ext:{ cols:[], onAccount:[], onDraw:[] },
+    redraw:function(){ draw(); },
     handles:handles, engineOf:engineOf, navCfg:navCfg,
     start:start, lineCalc:function(b,t,l){ return lineCalc(b,t,l); }, totals:totals, validate:validate, buildRecord:buildRecord,
     taxInfo:taxInfo, codeOfLine:codeOfLine, usedLines:usedLines, subClassOf:subClassOf,
