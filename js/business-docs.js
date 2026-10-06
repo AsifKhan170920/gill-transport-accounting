@@ -48,7 +48,7 @@
     if (stage == null) return null;
     var title = days < 0 ? name + ' expired' : days === 0 ? name + ' expires today' : name + ' expires in ' + days + (days === 1 ? ' day' : ' days');
     return { id: base + ':' + due + ':' + stage, kind: 'license', due: due, title: title,
-      detail: ['Expiry ' + App.fmtDate(due)].concat(detail ? [detail] : []).join(' · '),
+      detail: detail || '',
       link: { section: 'Settings', setting: 'business' } };
   }
   function licenseSource(b) {

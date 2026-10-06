@@ -255,7 +255,7 @@
   /* ---------- the dropdown under the bell ---------- */
   function drop() { return byId('rmDrop'); }
   function dropOpen() { var d = drop(); return !!(d && d.classList && !d.classList.contains('hide')); }
-  function itemRow(it, compact) {
+  function itemRow(it) {
     var when = it.due ? fmtDate(it.due) + (it.days != null ? ' · ' + whenText(it.days) : '') : '';
     return '<div class="rm-item rm-' + it.severity + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="rm-main" onclick="Reminders.open(' + jsq(it.key) + ')">' +
@@ -263,7 +263,6 @@
         '<span class="rm-txt"><span class="rm-t">' + esc(it.title) + '</span>' +
         (it.detail ? '<span class="rm-d">' + esc(it.detail) + '</span>' : '') +
         (when ? '<span class="rm-w">' + esc(when) + '</span>' : '') + '</span></button>' +
-      (compact ? '' : '') +
       '<span class="rm-acts">' +
         '<button type="button" class="rm-act" title="Mark as read" aria-label="Mark as read" onclick="Reminders.markRead(' + jsq(it.key) + ')">' + ico('check', 15) + '</button>' +
         '<button type="button" class="rm-act" title="Snooze 1 day" aria-label="Snooze 1 day" onclick="Reminders.snooze(' + jsq(it.key) + ')">' + ico('clock', 15) + '</button>' +
@@ -410,18 +409,17 @@
       var k = jsq(it.key);
       return '<tr class="' + (it.read || it.snoozed ? 'rm-dim' : '') + '">' +
         '<td class="act"><button class="btn btn-xs" onclick="Reminders.open(' + k + ')">Open</button></td>' +
-        '<td class="nowrap">' + (it.due ? esc(fmtDate(it.due)) : '') + '</td>' +
+        '<td class="nowrap">' + (it.due ? esc(fmtDate(it.due)) : '') + (it.days != null ? '<div class="rm-when">' + esc(whenText(it.days)) + '</div>' : '') + '</td>' +
         '<td class="nowrap">' + badge + '</td>' +
-        '<td><span class="rm-t">' + esc(it.title) + '</span>' + (it.detail ? '<div class="rm-d">' + esc(it.detail) + '</div>' : '') + '</td>' +
-        '<td class="nowrap">' + esc(kindLabel(it.kind)) + '</td>' +
-        '<td class="nowrap rm-when">' + esc(whenText(it.days)) + '</td>' +
-        '<td class="nowrap rm-rowacts">' +
+        '<td class="rm-rem"><span class="rm-t">' + esc(it.title) + '</span>' + (it.detail ? '<div class="rm-d">' + esc(it.detail) + '</div>' : '') + '</td>' +
+        '<td class="rm-kind">' + esc(kindLabel(it.kind)) + '</td>' +
+        '<td class="nowrap"><div class="rm-rowacts">' +
           (it.read ? '<button class="btn btn-xs" onclick="Reminders.markUnread(' + k + ')">Mark unread</button>' : '<button class="btn btn-xs" onclick="Reminders.markRead(' + k + ')">Mark as read</button>') +
           (it.snoozed ? '<button class="btn btn-xs" onclick="Reminders.unsnooze(' + k + ')">Unsnooze</button>' : '<button class="btn btn-xs" onclick="Reminders.snooze(' + k + ')">Snooze 1 day</button>') +
-        '</td></tr>';
-    }).join('') : '<tr><td colspan="7"><div class="reg-empty">' + (f.status === 'attention' && !f.kind && !f.q ? 'Nothing needs attention. You are all caught up.' : 'No reminders match these filters.') + '</div></td></tr>';
+        '</div></td></tr>';
+    }).join('') : '<tr><td colspan="6"><div class="reg-empty">' + (f.status === 'attention' && !f.kind && !f.q ? 'Nothing needs attention. You are all caught up.' : 'No reminders match these filters.') + '</div></td></tr>';
     return (A ? A.crumb('Reminders') : '') + head +
-      '<div class="tbl-scroll"><table class="reg-tbl rm-tbl"><thead><tr><th class="act"></th><th>Due</th><th>Status</th><th>Reminder</th><th>Kind</th><th>When</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="tbl-scroll"><table class="reg-tbl rm-tbl"><thead><tr><th class="act"></th><th>Due</th><th>Status</th><th>Reminder</th><th>Kind</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' +
       '<div class="reg-foot"><span class="cnt">' + rows.length + ' ' + (rows.length === 1 ? 'reminder' : 'reminders') + '</span></div>';
   }
   function setF(k, v) { API._f[k] = v || ''; var A = getApp(); if (A && A.wsMode === 'reminders') A.renderMain(A.curBiz()); }
