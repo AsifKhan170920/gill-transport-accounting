@@ -240,7 +240,7 @@
 
     format: { title: 'Date & Number Format', kind: 'form', store: 'fmt',
       intro: 'This changes how every date and amount is shown across the business — registers, the Summary and printed documents.',
-      fields: [S('date', 'Date format', [['MM/DD/YYYY', 'MM/DD/YYYY  (12/31/2026)'], ['DD/MM/YYYY', 'DD/MM/YYYY  (31/12/2026)'], ['YYYY-MM-DD', 'YYYY-MM-DD  (2026-12-31)'], ['D MMM YYYY', 'D MMM YYYY  (31 Dec 2026)']], { def: 'MM/DD/YYYY' }),
+      fields: [S('date', 'Date format', [['MM/DD/YYYY', 'MM/DD/YYYY  (12/31/2026)'], ['DD/MM/YYYY', 'DD/MM/YYYY  (31/12/2026)'], ['YYYY-MM-DD', 'YYYY-MM-DD  (2026-12-31)'], ['D MMM YYYY', 'D MMM YYYY  (31 Dec 2026)']], { def: 'DD/MM/YYYY' }),
         S('time', 'Time format', ['9:40:07', '9:40:07 AM', '09:40:07', '09:40:07 AM'], { def: '09:40:07 AM' }),
         S('week', 'First day of week', ['Sunday', 'Monday', 'Saturday'], { def: 'Monday' }),
         S('sep', 'Number format', [['comma-dot', '123,456,789.00'], ['dot-comma', '123.456.789,00'], ['space-comma', '123 456 789,00'], ['none-dot', '123456789.00']], { def: 'comma-dot' }),

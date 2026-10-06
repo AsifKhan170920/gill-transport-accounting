@@ -54,7 +54,10 @@ function defaultTaxCodes(){ return [{name:'VAT 5%',rate:5},{name:'Zero-rated',ra
 function ensureSettings(b){
   if(!b.details) b.details={};
   if(!b.baseCurrency) b.baseCurrency=currencyForCountry(b.country);
-  if(!b.fmt) b.fmt={date:'MM/DD/YYYY',sep:'comma-dot',decimals:2};
+  if(!b.fmt) b.fmt={date:'DD/MM/YYYY',sep:'comma-dot',decimals:2};
+  /* one-off: the old built-in default was MM/DD/YYYY; dates show DD/MM/YYYY.
+     Runs once per business (fmtV), so a format chosen later in Settings stays. */
+  if(b.fmtV!==2){ if(b.fmt.date==='MM/DD/YYYY'||!b.fmt.date) b.fmt.date='DD/MM/YYYY'; b.fmtV=2; }
   if(!b.taxCodes) b.taxCodes=defaultTaxCodes();
   if(b.lockDate==null) b.lockDate='';
   if(b.id===1001 && !b.details.address){ b.details={legalName:'Abbass Tempering Industry LLC',
