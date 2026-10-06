@@ -102,7 +102,12 @@
     LISTS: [['trucks', 'Trucks', 'e.g. DXB-A-12345'], ['crushers', 'Crushers', 'Crusher names'], ['destinations', 'Destinations', 'Sites / ports'],
       ['materials', 'Materials', 'e.g. Gabbro 3/4"'], ['vessels', 'Vessels', 'Vessel names'], ['dieselSuppliers', 'Diesel suppliers', 'Fuel suppliers (also taken from Suppliers)']],
     util: { esc: esc, parseDate: parseDate, parseNum: parseNum, parseTSV: parseTSV, csvCell: csvCell, todayIso: todayIso, ddmm: ddmm, r2: r2, r3: r3, uid: uid, uniq: uniq, money: money, qtyFmt: qtyFmt, fmtD: fmtD, toast: toast, curB: curB, byId: byId, hasDom: hasDom },
-    enabled: function (b) { return !!(b && b.features && b.features.gill); },
+    /* In the Gill build (window.GILL_BUILD) the module is on unless a business switched it off */
+    enabled: function (b) {
+      if (!b) return false;
+      if (b.features && b.features.gill != null) return !!b.features.gill;
+      return !!G.GILL_BUILD;
+    },
     /** b.gill with every part present (mutates b; the caller saves). */
     data: function (b) {
       var g = b.gill = (b.gill && typeof b.gill === 'object') ? b.gill : {};
