@@ -49,6 +49,7 @@
       if(r.custom && !blank(r.custom[ACCT_NO_KEY])) needAcctNo=true;
     });
     if(ensureAcctNoField(b, needAcctNo)) changed=true;
+    if(migrateBankCols(b, needAcctNo)) changed=true;
     return changed;
   }
   /** "Account number" is an ordinary custom field of the bank form (Settings > Custom Fields lists it). */
@@ -59,6 +60,14 @@
     if(!c){ c=b.formConfig.bankCash={show:{},custom:[]}; } if(!c.custom) c.custom=[];
     c.custom.push({ key:ACCT_NO_KEY, label:'Account number', type:'field', dataType:'text' });
     return true;
+  }
+  /* saved column choices from before the fix: ibanNo is now iban, the settings checkboxes are not columns,
+     Credit limit amount became Available credit, and Account number joins IBAN (once) */
+  function migrateBankCols(b, acctNo){
+    var d=b.details, lc=d&&d.listCols&&d.listCols.bankCash; if(!Array.isArray(lc) || (d._ffBankCols||0)>=1) return false;
+    var out=[]; lc.forEach(function(k){ if(k==='ibanNo') k='iban'; if(k==='creditLimit') k='availableCredit'; if(k==='pending'||k==='creditLimitOn'||k==='inactive'||k==='hasIban') return; if(out.indexOf(k)<0) out.push(k); });
+    if(acctNo && out.indexOf('cf_'+ACCT_NO_KEY)<0){ var at=out.indexOf('iban'); if(at<0) out.push('cf_'+ACCT_NO_KEY); else out.splice(at+1,0,'cf_'+ACCT_NO_KEY); }
+    d.listCols.bankCash=out; d._ffBankCols=1; return true;
   }
   function bankCustomFields(b){ var c=(b&&b.formConfig&&b.formConfig.bankCash)||{}; return (c.custom||[]).filter(function(x){ return x && (x.type||'field')==='field'; }); }
 

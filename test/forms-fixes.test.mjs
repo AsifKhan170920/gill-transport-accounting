@@ -105,6 +105,15 @@ describe('Bank & Cash columns (34, 35)', () => {
       assert.ok(!labels.includes(gone), gone);
   });
 
+  test('saved column choices from before the fix are carried over (ibanNo -> IBAN, + Account number)', () => {
+    const b = cur(); b.details = b.details || {}; b.details.listCols = { bankCash: ['name', 'balance', 'iban', 'ibanNo', 'pending', 'creditLimitOn', 'creditLimit'] };
+    ctx.FormsFixes.migrateBanks(b);
+    assert.deepEqual([...b.details.listCols.bankCash], ['name', 'balance', 'iban', 'cf_accountNumber', 'availableCredit']);
+    b.details.listCols.bankCash = ['name'];
+    ctx.FormsFixes.migrateBanks(b);
+    assert.deepEqual([...b.details.listCols.bankCash], ['name'], 'runs once; later choices are the user\'s');
+  });
+
   test('defaults: Name, Cleared balance, Actual balance', () => {
     App.wsSection = 'Bank and Cash Accounts';
     assert.deepEqual([...App._cols(ctx.REG.bankCash).map((c) => c.label)], ['Name', 'Cleared balance', 'Actual balance']);
