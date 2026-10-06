@@ -34,6 +34,8 @@ var GL = (function(){
   function today(){ var d=new Date(); var p=function(n){ return (n<10?'0':'')+n; }; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
   function day(v){ return String(v||'').slice(0,10); }
   function lc(s){ return String(s||'').trim().toLowerCase(); }
+  /** numeric tag of a reverse-charge tax code (stored rcTag, else a hash of its name) */
+  function rcTagOf(t){ if(!t) return ''; if(!blank(t.rcTag)) return String(t.rcTag); var h=5381, s=String(t.name||''); for(var i=0;i<s.length;i++){ h=((h*33)^s.charCodeAt(i))>>>0; } return String(h%1000000000); }
 
   /* ------------------------------------------------------------ chart helpers */
   function accounts(b){ return ((b&&b.coa)||[]).filter(function(n){ return n && n.type==='account'; }); }
@@ -204,6 +206,20 @@ var GL = (function(){
       return acctEnt(n && (byId(b,n.id)||n), sub, sign*x.net, { t:typ });
     }
     var OUT=function(){ return need('output vat'); }, INP=function(){ return need('input vat'); };
+    /* the tax code a line refers to: by name, or (designed forms, whose tax value must stay numeric) a
+       reverse-charge code by its tag "0e<tag>" — a value that still reads as 0 % */
+    function lineTaxCode(ln){ if(!ln) return null; var codes=b.taxCodes||[];
+      var cands=[ln.taxCode, ln.tax, ln.taxRate].filter(function(v){ return !blank(v); }).map(String);
+      for(var i=0;i<cands.length;i++){ var m=/^0e(\d+)$/.exec(cands[i]);
+        for(var j=0;j<codes.length;j++){ var c=codes[j]; if(!c) continue; if(c.name===cands[i] || (m && c.reverse && rcTagOf(c)===m[1])) return c; } }
+      return null; }
+    /* tax goes to the tax code's own account when it has one, else to Output / Input VAT */
+    function taxAcct(ln, dflt){ var tc=lineTaxCode(ln); var n=tc&&!blank(tc.account)?byId(b,tc.account):null; return n?n.id:dflt(); }
+    /* reverse charge (UAE imports / RCM): the buyer accounts for the VAT itself, so the same amount is
+       posted to Input VAT (Dr) and Output VAT (Cr) — net zero, nothing added to the document total */
+    function rcPush(ents, ln, signedNet, typ){ var tc=lineTaxCode(ln); if(!tc||!tc.reverse) return;
+      var rate=num(tc.rcRate!=null&&tc.rcRate!==''?tc.rcRate:tc.rate); var v=r2(signedNet*rate/100); if(!v) return;
+      ents.push({ a:INP(), v:v, t:typ+' — reverse charge' }, { a:OUT(), v:-v, t:typ+' — reverse charge' }); }
 
     /* ---------- starting balances ---------- */
     accounts(b).forEach(function(n){ var v=num(n.balance); if(!v||subKind(b,n)==='bankCash') return;   /* bank accounts carry the cash control account's opening */
@@ -246,7 +262,8 @@ var GL = (function(){
         var n=lineAcct(b,ln), sub=lineSub(ln);
         if(n && /^inventory on hand$/i.test(n.name||'') && blank(sub) && !blank(ln.item)) sub=ln.item;
         var e=acctEnt(n, sub, -dir*x.net, { t:typ, d:ln.desc||ln.description||'' }); ents.push(e);
-        if(x.tax) ents.push({ a:rec?OUT():INP(), v:-dir*x.tax, t:typ }); });
+        if(x.tax) ents.push({ a:taxAcct(ln, rec?OUT:INP), v:-dir*x.tax, t:typ });
+        if(!rec) rcPush(ents, ln, -dir*x.net, typ); });
       var amt=(r.amount!=null&&r.amount!=='')?num(r.amount):(r.total!=null&&r.total!==''?num(r.total):gross);
       ents.push(bankEnt(rec?r.receivedIn:r.paidFrom, dir*amt, typ));
       post({ src:key, id:r.id, date:r.date, ref:r.reference, type:typ, party:party, desc:r.description }, ents);
@@ -270,11 +287,14 @@ var GL = (function(){
       var party=inv[partyField]||inv.custName||inv.supName||'';
       var typ=label+(party?' — '+party:''); var ents=[], lns=(inv.lines||[]).filter(function(l){ return l; }), taxSum=0;
       var anyAcct=lns.some(function(l){ return lineAcct(b,l) || !blank(l.item||l.items); });
+      var dfltTax=purchase?INP:OUT, taxBy={}, taxOrder=[];
+      var addTax=function(a,v){ if(!(a in taxBy)){ taxBy[a]=0; taxOrder.push(a); } taxBy[a]+=v; };
       if(lns.length && anyAcct){ lns.forEach(function(ln){ var x=lineNums(ln); if(!x.net&&!x.tax) return;
-          ents.push(docLineEnt(ln, purchase, -sign, typ)); taxSum+=x.tax; }); }
+          ents.push(docLineEnt(ln, purchase, -sign, typ)); taxSum+=x.tax; if(x.tax) addTax(taxAcct(ln,dfltTax), x.tax);
+          if(purchase) rcPush(ents, ln, -sign*x.net, typ); }); }
       else { var n=byId(b,inv.account)||byName(b,inv.account); var sub=num(inv.subtotal!=null&&inv.subtotal!==''?inv.subtotal:(num(inv.total)-num(inv.tax)));
-        ents.push(acctEnt(n,'',-sign*sub,{t:typ})); taxSum=num(inv.tax); }
-      if(Math.abs(taxSum)>0.0049) ents.push({ a:purchase?INP():OUT(), v:-sign*taxSum, t:typ });
+        ents.push(acctEnt(n,'',-sign*sub,{t:typ})); taxSum=num(inv.tax); if(taxSum) addTax(dfltTax(), taxSum); }
+      if(Math.abs(taxSum)>0.0049) taxOrder.forEach(function(a){ if(Math.abs(taxBy[a])>0.0049) ents.push({ a:a, v:-sign*taxBy[a], t:typ }); });
       var tot=(inv.total!=null&&inv.total!=='')?num(inv.total):-sign*ents.reduce(function(s,e){ return s+(Number(e.v)||0); },0);
       ents.push(blank(party) ? { a:null, v:sign*tot, t:typ, why:'no '+(purchase?'supplier':'customer')+' selected' } : { a:need(ctrlKey), s:party, v:sign*tot, t:typ });
       /* withholding tax deducted on the invoice itself: receivable from the authority, not the customer */
@@ -318,7 +338,8 @@ var GL = (function(){
       var ents=[], tot=0, lns=(c.lines&&c.lines.length)?c.lines.filter(function(l){ return l; }):[{ account:c.account, amount:c.amount }];
       lns.forEach(function(ln){ var x=lineNums(ln); if(!x.gross&&!x.net) return; tot+=x.gross;
         ents.push(acctEnt(lineAcct(b,ln), lineSub(ln), x.net, { t:typ, d:ln.desc||ln.description||'' }));
-        if(x.tax) ents.push({ a:INP(), v:x.tax, t:typ }); });
+        if(x.tax) ents.push({ a:taxAcct(ln, INP), v:x.tax, t:typ });
+        rcPush(ents, ln, x.net, typ); });
       if(tot) ents.push(blank(payer)?{ a:null, v:-tot, why:'no payer selected' }:{ a:need('expense claims'), s:payer, v:-tot, t:typ });
       post({ src:'expenseClaims', id:c.id, date:c.date, ref:c.reference, type:typ, party:payer, desc:c.description }, ents); });
 
@@ -456,7 +477,7 @@ var GL = (function(){
 
   return { build:build, get:get, invalidate:invalidate, balance:balance, net:net, entries:entries, subBalance:subBalance,
            subBalances:subBalances, docLines:docLines, partyEntries:partyEntries, trial:trial, issues:issues, sysAcct:sysAcct, lineNums:lineNums,
-           lineAcct:lineAcct, subKind:subKind, bankOf:bankOf, num:num, r2:r2, today:today };
+           lineAcct:lineAcct, subKind:subKind, bankOf:bankOf, num:num, r2:r2, today:today, rcTagOf:rcTagOf };
 })();
 if(typeof window!=='undefined') window.GL=GL;
 
