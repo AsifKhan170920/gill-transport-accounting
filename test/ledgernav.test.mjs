@@ -139,7 +139,8 @@ describe('origin chain', () => {
 describe('Transaction Journal', () => {
   test('a receipt posts bank / income / VAT and balances', () => {
     const b = App.curBiz(); const rows = App.postingsFor(b, 'receipts', b.records.receipts[0]);
-    const by = Object.fromEntries(rows.map((r) => [r.account, r]));
+    /* the ledger engine posts banks to Cash & cash equivalents with the bank as the sub-account */
+    const by = Object.fromEntries(rows.map((r) => [r.link && r.link.t === 'ledger' && r.sub ? r.sub : r.account, r]));
     assert.equal(by['ADCB Current'].debit, 1000);
     assert.equal(by['Sales'].credit, 952.38);
     assert.equal(by['Output VAT'].credit, 47.62);

@@ -210,10 +210,12 @@
     return open.concat(rest.reverse());
   };
   A._lnChrono = chrono;
+  /* a column sort picked by the user (js/list-tools.js) already ordered the rows: keep it */
+  var userSorted = function(app){ try{ var c = app._sortCtx && app._sortCtx(); return !!(c && app.sortState && app.sortState(c)); }catch(e){ return false; } };
   [['ledgerBodyHtml', 'ledgerData', true], ['glLedgerBodyHtml', 'glLedgerData', true], ['invLedgerBodyHtml', 'invLedgerData', false], ['faLedgerBodyHtml', 'faLedgerData', false]].forEach(function(t){
     wrap(t[0], function(orig, a){
       var self = this, dataFn = this[t[1]]; if(typeof dataFn!=='function') return orig.apply(this, a);
-      this[t[1]] = function(){ var d = dataFn.apply(self, arguments); if(d && d.rows){ d.rows = chrono(d.rows, t[2]); d.count = d.rows.length; } return d; };
+      this[t[1]] = function(){ var d = dataFn.apply(self, arguments); if(d && d.rows){ d.rows = userSorted(self) ? d.rows : chrono(d.rows, t[2]); d.count = d.rows.length; } return d; };
       try{ return orig.apply(this, a); } finally{ this[t[1]] = dataFn; }
     });
   });
@@ -358,9 +360,14 @@
       return t; };
     var body = rows.length ? rows.map(function(r){ return '<tr><td>'+link(r)+'</td><td class="r m">'+(r.debit ? self.money(r.debit) : '')+'</td><td class="r m">'+(r.credit ? self.money(r.credit) : '')+'</td></tr>'; }).join('')
       : '<tr><td colspan="3" class="ln-tj-empty">This document does not post to the general ledger.</td></tr>';
-    var bad = rows.length && Math.abs(dr - cr) >= 0.005;
+    /* the ledger engine sends an unbalanced difference to Suspense, so the totals agree: the
+       document is still out of balance, by what went to Suspense */
+    var isSusp = function(r){ if(r.acctId==='sys_suspense') return true; var n = r.acctId!=null ? acctOf(b, r.acctId) : null; return !!(n && n.suspenseControl); };
+    var susp = 0; rows.forEach(function(r){ if(isSusp(r)) susp += r.credit - r.debit; }); susp = R2(susp);
+    var bad = rows.length && (Math.abs(dr - cr) >= 0.005 || Math.abs(susp) >= 0.005);
+    var wdr = R2(dr - (susp < 0 ? -susp : 0)), wcr = R2(cr - (susp > 0 ? susp : 0));
     return '<div class="ln-tj" id="lnTJ"><div class="ln-tj-h">Transaction Journal</div>'+
-      (bad ? '<div class="ln-tj-warn" role="alert">Debits ('+this.money(dr)+') do not equal credits ('+this.money(cr)+') — out of balance by '+this.money(Math.abs(dr - cr))+'.</div>' : '')+
+      (bad ? '<div class="ln-tj-warn" role="alert">Debits ('+this.money(wdr)+') do not equal credits ('+this.money(wcr)+') — out of balance by '+this.money(Math.abs(wdr - wcr))+'.'+(Math.abs(susp) >= 0.005 ? ' The difference is posted to Suspense.' : '')+'</div>' : '')+
       '<table class="reg-tbl ln-tj-tbl"><thead><tr><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>'+body+'</tbody>'+
       (rows.length ? '<tfoot><tr class="ln-tj-tot'+(bad ? ' bad' : '')+'"><td>Total</td><td class="r m">'+this.money(dr)+'</td><td class="r m">'+this.money(cr)+'</td></tr></tfoot>' : '')+
       '</table></div>';
