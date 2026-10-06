@@ -32,7 +32,7 @@ const Designer={
   },
   close(){ this.save(); document.getElementById('designerOverlay').classList.add('hide'); },
   save(){ const b=App.curBiz(); if(!b) return; b.templates=b.templates||{}; b.templates[this.docType]=JSON.parse(JSON.stringify(this.tpl)); App.saveBiz(b); },
-  reset(){ if(!confirm('Reset this template to the default layout?')) return; this.tpl=this.defaultTpl(this.docType); this.selId=null; this.save(); this.renderAll(); },
+  reset(){ if(!(window.UIModal?UIModal.gate('Reset this template to the default layout?',()=>this.reset()):true)) return; this.tpl=this.defaultTpl(this.docType); this.selId=null; this.save(); this.renderAll(); },
 
   /* ---- default template + element defaults ---- */
   defaultData(type){

@@ -199,11 +199,11 @@ describe('Edit columns', () => {
     const pool = App._colPool(App.cfg());
     const labels = pool.map((p) => p.label.toLowerCase());
     assert.equal(new Set(labels).size, labels.length);
-    assert.ok(pool.some((p) => p.key === 'cf:cfa'));
-    assert.ok(!pool.some((p) => p.key === 'cf:cfb'), 'custom field duplicating a built-in label is dropped');
+    assert.ok(pool.some((p) => p.key === 'cf_cfa'));
+    assert.ok(!pool.some((p) => p.key === 'cf_cfb'), 'custom field duplicating a built-in label is dropped');
     assert.equal(pool[pool.length - 1].label, 'Journal');
-    biz.details.listCols = { receipts: ['reference', 'cf:cfa'] }; App.saveBiz(App.curBiz());
-    const b2 = App.curBiz(); b2.details.listCols = { receipts: ['reference', 'cf:cfa'] }; App.saveBiz(b2);
+    biz.details.listCols = { receipts: ['reference', 'cf_cfa'] }; App.saveBiz(App.curBiz());
+    const b2 = App.curBiz(); b2.details.listCols = { receipts: ['reference', 'cf_cfa'] }; App.saveBiz(b2);
     const h = App.tableHtml(App.curBiz());
     assert.match(h, /Cheque no/); assert.match(h, /CHQ-9/);
   });

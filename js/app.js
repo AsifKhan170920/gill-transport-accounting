@@ -206,7 +206,7 @@ const App = {
   removeSelected(){
     const ids=[...document.querySelectorAll('.biz-chk:checked')].map(c=>+c.value);
     if(!ids.length) return;
-    if(!confirm('Remove '+ids.length+' business'+(ids.length>1?'es':'')+'? This cannot be undone.')) return;
+    if(!this._ask('Remove '+ids.length+' business'+(ids.length>1?'es':'')+'? This cannot be undone.',()=>this.removeSelected())) return;
     DB.set(DB.k.biz, DB.get(DB.k.biz,[]).filter(b=>!ids.includes(b.id))); this.renderBusinesses();
   },
   onChkChange(){ document.getElementById('removeBtn').disabled=document.querySelectorAll('.biz-chk:checked').length===0; },
@@ -229,7 +229,7 @@ const App = {
   closeBusiness(){ this.openBiz=null; this.go('businesses'); },
   curBiz(){ return DB.get(DB.k.biz,[]).find(b=>b.id===this.openBiz); },
   saveBiz(b){ const all=DB.get(DB.k.biz,[]); const i=all.findIndex(x=>x.id===b.id); if(i>=0){ all[i]=b; DB.set(DB.k.biz,all); } },
-  renameBusiness(){ const b=this.curBiz(); if(!b) return; const n=prompt('Rename business',b.name); if(n===null) return; b.name=n.trim()||b.name; this.saveBiz(b); this.renderWorkspace(); },
+  renameBusiness(){ const b=this.curBiz(); if(!b) return; const n=this._askText('Rename business',b.name,()=>this.renameBusiness()); if(n===null) return; b.name=n.trim()||b.name; this.saveBiz(b); this.renderWorkspace(); },
 
   selectSection(label){ this.closeNav(); this.navTrail=[]; this.pageNum=1; this.batchMode=false; this.batchSel=null; this.advFilters=null; this.histReturn=false; this.wsSection=label; this.listQuery=''; this.editingId=null; this.setView=null; this.repView=null; this.ledgerId=null;
     this.wsMode = label==='Summary' ? 'summary' : (label==='Dashboard' ? 'dashboard' :
@@ -572,7 +572,7 @@ const App = {
   batchDelete(){ this.batchMode=true; this.batchSel={}; this.renderWorkspace(); },
   batchCancel(){ this.batchMode=false; this.batchSel={}; this.renderWorkspace(); },
   batchToggle(id){ this.batchSel=this.batchSel||{}; if(this.batchSel[id]) delete this.batchSel[id]; else this.batchSel[id]=1; var c=document.getElementById('batchCount'); if(c) c.textContent=Object.keys(this.batchSel).length; },
-  batchDeleteRun(){ var b=this.curBiz(); var key=this._sectionKey(); var ids=Object.keys(this.batchSel||{}).map(Number); if(!ids.length){ alert('Select at least one row first.'); return; } var c=REG[key]||{}; var noun=(c.label||'records'); var _lk=(b&&b.lockDate)||''; if(_lk){ var _arr0=(b.records&&b.records[key])||[]; var _locked=_arr0.filter(function(r){ if(ids.indexOf(r.id)<0) return false; var _d=String(r.issueDate||r.date||'').slice(0,10); return _d&&_d<=_lk; }).length; if(_locked){ alert(_locked+' of the selected '+noun+' are dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!confirm('Delete '+ids.length+' selected '+noun+'?\n\nThis can be undone from History.')) return;
+  batchDeleteRun(){ var b=this.curBiz(); var key=this._sectionKey(); var ids=Object.keys(this.batchSel||{}).map(Number); if(!ids.length){ alert('Select at least one row first.'); return; } var c=REG[key]||{}; var noun=(c.label||'records'); var _lk=(b&&b.lockDate)||''; if(_lk){ var _arr0=(b.records&&b.records[key])||[]; var _locked=_arr0.filter(function(r){ if(ids.indexOf(r.id)<0) return false; var _d=String(r.issueDate||r.date||'').slice(0,10); return _d&&_d<=_lk; }).length; if(_locked){ alert(_locked+' of the selected '+noun+' are dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!this._ask('Delete '+ids.length+' selected '+noun+'?\n\nThis can be undone from History.',()=>this.batchDeleteRun())) return;
     var idset={}; ids.forEach(function(i){ idset[i]=1; }); var arr=(b.records&&b.records[key])||[]; var deleted=arr.filter(function(r){ return idset[r.id]; }).map(function(r){ return JSON.parse(JSON.stringify(r)); });
     b.records[key]=arr.filter(function(r){ return !idset[r.id]; }); try{ this._logActivity(b,'delete',key,null,null,{bulkDeleted:deleted, label:'Batch delete — '+deleted.length+' '+noun}); }catch(e){} try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.batchMode=false; this.batchSel={}; this.renderWorkspace(); var n=deleted.length; setTimeout(function(){ alert('Deleted '+n+' '+noun+'.'); },30); },
 
@@ -605,6 +605,10 @@ const App = {
   /* ----- app-level modal overlay ----- */
   _openOverlay(html){ this._closeOverlay(); const ov=document.createElement('div'); ov.id='appOverlay'; ov.className='app-modal-ov'; ov.onclick=function(e){ if(e.target===ov) App._closeOverlay(); }; ov.innerHTML='<div class="app-modal">'+html+'</div>'; document.body.appendChild(ov); },
   _closeOverlay(){ const o=document.getElementById('appOverlay'); if(o) o.remove(); },
+  /* App modals instead of the browser's confirm()/prompt() (js/ui-modal.js). `if(!this._ask(msg,rerun)) return;`
+     opens the modal and returns false; OK re-runs the action, which then passes straight through. */
+  _ask(msg,rerun){ if(typeof UIModal!=='undefined'&&UIModal.gate) return UIModal.gate(msg,rerun); return (typeof confirm==='function')?confirm(msg):true; },
+  _askText(msg,def,rerun){ if(typeof UIModal!=='undefined'&&UIModal.promptGate) return UIModal.promptGate(msg,def,rerun); return null; },
 
   /* ----- configurable list columns (#3) ----- */
   _sectionKey(){ return LABEL2KEY[this.wsSection]; },
@@ -1116,7 +1120,7 @@ const App = {
         if(data.reference===''||data.reference==null){ const _rc=document.getElementById('f_refAuto'); if(_rc&&_rc.checked) data.reference=this.nextRef(b,LABEL2KEY[this.wsSection]); }
       } else {
         const j=this.journalTotals();
-        if(Math.abs(j.diff)>0.005 && !confirm('Debits ('+this.money(j.debit)+') and credits ('+this.money(j.credit)+') are out of balance by '+this.money(Math.abs(j.diff))+'.\n\nManager requires journal entries to balance. Save anyway?')) return;
+        if(Math.abs(j.diff)>0.005 && !this._ask('Debits ('+this.money(j.debit)+') and credits ('+this.money(j.credit)+') are out of balance by '+this.money(Math.abs(j.diff))+'.\n\nManager requires journal entries to balance. Save anyway?',()=>this.saveRecord())) return;
         data.lines=lines.map(ln=>({account:ln.account||'',sub:ln.sub||'',desc:ln.desc||'',debit:this.parseNum(ln.debit),credit:this.parseNum(ln.credit)}));
         data.debit=j.debit; data.credit=j.credit;
       }
@@ -1180,7 +1184,7 @@ const App = {
     this.saveBiz(b);
     return {ok:true,record:rec};
   },
-  deleteRecord(id){ if(!this.guardWrite()) return; const b=this.curBiz(), c=this.cfg(); var _r=(this.records(b)||[]).find(function(r){return r.id===id;}); var _lk=(b&&b.lockDate)||''; if(_lk&&_r){ var _d=String(_r.issueDate||_r.date||'').slice(0,10); if(_d&&_d<=_lk){ alert('This entry is dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!confirm('Delete this '+c.singular.toLowerCase()+'?')) return;
+  deleteRecord(id){ if(!this.guardWrite()) return; const b=this.curBiz(), c=this.cfg(); var _r=(this.records(b)||[]).find(function(r){return r.id===id;}); var _lk=(b&&b.lockDate)||''; if(_lk&&_r){ var _d=String(_r.issueDate||_r.date||'').slice(0,10); if(_d&&_d<=_lk){ alert('This entry is dated on or before the lock date ('+_lk+') and can\u2019t be deleted while the period is locked. Update Settings \u2192 Lock Date first.'); return; } } if(!this._ask('Delete this '+c.singular.toLowerCase()+'?',()=>this.deleteRecord(id))) return;
     var _key=this._sectionKey(); var _bef=(this.records(b)||[]).find(function(r){return r.id===id;}); _bef=_bef?JSON.parse(JSON.stringify(_bef)):null;
     this.setRecords(b,this.records(b).filter(r=>r.id!==id)); try{ this._logActivity(b,'delete',_key,null,_bef); }catch(e){} refreshSummary(b); this.saveBiz(b); if(!this.backFromRecord()) this.backToList(); },
   backToList(){ this.recReturn=null; this.histReturn=false; this.editingId=null; this.wsMode='list'; this.renderWorkspace(); },
@@ -1233,7 +1237,9 @@ const App = {
     var trn=prec.trn?('TRN: '+e(prec.trn)):''; var phone=prec.phone?('Tel: '+e(prec.phone)):''; var email=prec.email?e(prec.email):'';
     return [addrH,trn,phone,email].filter(Boolean).join('<br>'); },
   voucherDoc(b,c,rec,opts){ const d=b.details||{}; const isCash=c.lines&&c.lines.kind==='cash'; const isInv=c.lines&&c.lines.kind==='invoice'; const e=s=>this.esc(s);
-    const SHOW=(k,ck)=>this.cfgShow(b,k,ck); const ed=!!(opts&&opts.edit); const selK=(opts&&opts.sel)||null;
+    const _off={}; (Array.isArray(rec.printOff)?rec.printOff:[]).forEach(v=>{ _off[v]=1; }); const PO=(...vs)=>!(opts&&opts.edit)&&vs.some(v=>_off[v]);
+    const _recHide={date:['f:date'],reference:['f:reference'],dueDate:['f:dueDate'],party:['f:custName','f:supName'],partyAddress:['f:custAddress','f:supAddress'],description:['f:narration','f:description'],bankDetails:['f:bank_accounts_detail']};
+    const SHOW=(k,ck)=>this.cfgShow(b,k,ck)&&!(_recHide[ck]&&PO(..._recHide[ck])); const ed=!!(opts&&opts.edit); const selK=(opts&&opts.sel)||null;
     const co=e(d.legalName||b.name||''); const addr=(d.address||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>');
     const phone=(d.phone||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>'); const email=d.email?e(d.email):''; const trn=d.taxNumber?'TRN: '+e(d.taxNumber):'';
     const logo=d.logo?'<img class="vch-logo" src="'+e(d.logo)+'" alt="">':'';
@@ -1245,7 +1251,7 @@ const App = {
       const title=(rec.customTitleOn&&rec.customTitle)?rec.customTitle:(c.singular||'Invoice');
       const party=rec.customer||rec.supplier||'';
       const billing=(rec.billingAddress||'').split('\n').filter(Boolean).map(l=>e(l)).join('<br>');
-      const showTax=rec.showTaxCol!==false; const lns=rec.lines||[];
+      const showTax=rec.showTaxCol!==false; const lns=(rec.lines||[]).filter(l=>!(l&&l.rounding));
       const hasItem=lns.some(l=>l.item&&String(l.item).trim());
       const hasDesc=lns.some(l=>l.desc&&String(l.desc).trim());
       const firstHdr=hasItem?'Item':(hasDesc?'Description':'Account');
@@ -1258,10 +1264,10 @@ const App = {
         const sub=(it&&de)?'<div class="iv-sub">'+e(de)+'</div>':''; return e(main)+sub; };
       const colDefs=[
         {k:'first',th:firstHdr,align:'left',present:true,cell:firstCell,sum:''},
-        {k:'qty',th:unitHdr,align:'right',present:has('qty'),cell:ln=>{ const q=this.parseNum(ln.qty); return q?e(this.numStr(q)):''; },sum:e(this.numStr(qtySum))},
-        {k:'price',th:'Unit price',align:'right',present:has('price'),cell:ln=>((ln.price!==''&&ln.price!=null)?this.money(ln.price):''),sum:''},
-        {k:'tax',th:'Tax',align:'right',present:hasTax,cell:ln=>(ln.tax?e((this.taxRate(ln.tax)||0)+'%'):''),sum:''},
-        {k:'taxAmt',th:'Tax Amount',align:'right',present:showTax&&hasTax,cell:ln=>this.money(ln.taxAmt),sum:this.money(taxSum)},
+        {k:'qty',th:unitHdr,align:'right',present:has('qty')&&rec.colQty!==false&&!PO('c:qty'),cell:ln=>{ const q=this.parseNum(ln.qty); return q?e(this.numStr(q)):''; },sum:e(this.numStr(qtySum))},
+        {k:'price',th:'Unit price',align:'right',present:has('price')&&!PO('c:price'),cell:ln=>((ln.price!==''&&ln.price!=null)?this.money(ln.price):''),sum:''},
+        {k:'tax',th:'Tax',align:'right',present:hasTax&&!PO('c:taxRate'),cell:ln=>{ if(!ln.tax&&!ln.taxCode) return ''; const _r=this.taxRate(ln.taxCode||ln.tax)||(ln.taxRate!==''&&ln.taxRate!=null?Number(ln.taxRate):0)||(isNaN(Number(ln.tax))?0:Number(ln.tax)); return e(_r+'%'); },sum:''},
+        {k:'taxAmt',th:'Tax Amount',align:'right',present:showTax&&hasTax&&!PO('c:taxAmount'),cell:ln=>this.money(ln.taxAmt),sum:this.money(taxSum)},
         {k:'total',th:'Total',align:'right',present:true,cell:ln=>this.money(ln.amount),sum:this.money(amtSum)}
       ];
       if(rec.colLineNum) colDefs.unshift({k:'num',th:'#',align:'left',present:true,cell:(ln,idx)=>String(idx+1),sum:''});
@@ -1275,9 +1281,12 @@ const App = {
       const tRow=(lbl,val,g)=>'<div class="iv-totrow'+(g?' iv-totrow-g':'')+'"><span>'+e(lbl)+'</span><span>'+this.money(val)+'</span></div>';
       let totRows; if(rec.taxInclusive){ totRows=(Number(rec.tax)?tRow('Includes '+this.invRateLabel(rec),rec.tax,0):'')+tRow('Total',rec.total,1); }
         else { totRows=tRow('Subtotal',rec.subtotal,0)+(Number(rec.tax)?tRow('Tax',rec.tax,0):'')+tRow('Total',rec.total,1); }
+      if(Number(rec.roundingAmt)) totRows=totRows.replace(/(<div class="iv-totrow iv-totrow-g">)/, tRow('Rounding',rec.roundingAmt,0)+'$1');
+      if(Number(rec.withholdingAmt)) totRows+=tRow('Withholding tax',-Number(rec.withholdingAmt),0);
+      if((key==='salesInv'||key==='purchInv')&&!rec.hideBalanceDue&&!PO('f:balanceDue')){ const _bd=(rec.balanceDue!=null&&rec.balanceDue!=='')?Number(rec.balanceDue):(Number(rec.total)||0)-(Number(rec.withholdingAmt)||0); totRows+=tRow('Balance due',_bd,1); }
       const totalsBox='<div class="iv-totbox2">'+totRows+'</div>';
       const table='<div class="iv-twrap"><table class="iv-table"><thead>'+thr+'</thead><tbody>'+rowsH+coltot+'</tbody></table></div>';
-      const showWords=(rec.amountInWords!==false);
+      const showWords=(rec.amountInWords!==false)&&!PO('f:amounts_in_word');
       const wordsBox=showWords?'<div class="iv-aw2"><span class="iv-aw-lbl">Amount in words</span><span class="iv-aw-val">'+e(this.amountInWords(rec.total,(d.currency||b.currency||b.baseCurrency||'')))+'</span></div>':'';
       const belowH='<div class="iv-belowtbl"><div class="iv-bl-left">'+wordsBox+'</div><div class="iv-bl-right">'+totalsBox+'</div></div>';
       const trnLine=(d.taxNumber&&SHOW(key,'trn'))?'TRN No: '+e(d.taxNumber):'';
@@ -1288,7 +1297,8 @@ const App = {
       if(d.footer&&SHOW(key,'footer')) cf+='<div class="iv-cfblock">'+e(d.footer).split('\n').join('<br>')+'</div>';
       const cfWrap=cf?'<div class="iv-cf">'+cf+'</div>':'';
       const showBank=(!isP)&&(rec.printBankDetails==null||rec.printBankDetails)&&SHOW(key,'bankDetails');
-      const bankBox=showBank?'<div class="iv-bankbox"><div class="iv-bb-lbl">Bank Details:</div><div class="iv-bb-area">'+(rec.bankDetails?e(rec.bankDetails).split('\n').join('<br>'):'')+'</div></div>':'';
+      const _bankTxt=String(rec.bankDetails||rec.bank_accounts_detail||'').trim();
+      const bankBox=(showBank&&(_bankTxt||ed))?'<div class="iv-bankbox"><div class="iv-bb-lbl">Bank Details:</div><div class="iv-bb-area">'+(_bankTxt?e(_bankTxt).split('\n').join('<br>'):'')+'</div></div>':'';
       const signBox='<div class="iv-sign"><div class="iv-sign-box"><div class="iv-sign-top">For '+co+'</div><div class="iv-sign-bot">Sign and stamp</div></div><div class="iv-sign-box"><div class="iv-sign-top">'+(isP?'For supplier':'For customer')+'</div><div class="iv-sign-bot">Sign and stamp</div></div></div>';
       const st=this.invStatus(rec); const stcls=st==='Overdue'?'neg':(st==='Paid'?'pos':'neu');
       const badge=(showStatus&&SHOW(key,'status')&&rec.printStatus===true)?'<div class="iv-status"><span class="'+stcls+'">'+e(st.toUpperCase())+'</span></div>':'';
@@ -1301,8 +1311,9 @@ const App = {
         return h; };
       const fieldsH=(SHOW(key,'date')?'<dt>'+dateLbl+'</dt><dd>'+e(this.fmtDateUS(rec.issueDate||rec.date))+'</dd>':'')+
         (rec.reference&&SHOW(key,'reference')?'<dt>'+numLbl+'</dt><dd>'+e(rec.reference)+'</dd>':'')+
-        (!rec.hideDueDate&&SHOW(key,'dueDate')?'<dt>Due Date</dt><dd>'+(rec.dueDate?e(this.fmtDateUS(rec.dueDate)):'-')+'</dd>':'');
-      const partyName=SHOW(key,'party')?e(party):''; const partyAddr=SHOW(key,'partyAddress')?this._partyBlock(b,key,rec):'';
+        (()=>{ if(rec.hideDueDate||!SHOW(key,'dueDate')) return ''; const isQ=(key==='salesQuotes'||key==='purchQuotes'); const dv=isQ?(rec.validUntil||rec.expiryDate||rec.dueDate):rec.dueDate;
+          if(!dv&&!(key==='salesInv'||key==='purchInv')) return ''; return '<dt>'+(isQ?'Valid until':'Due Date')+'</dt><dd>'+(dv?e(this.fmtDateUS(dv)):'-')+'</dd>'; })();
+      const partyName=SHOW(key,'party')?e(party):''; let partyAddr=SHOW(key,'partyAddress')?this._partyBlock(b,key,rec):''; if(PO('f:custTRN','f:supTRN')) partyAddr=partyAddr.split('<br>').filter(l=>l.indexOf('TRN: ')!==0).join('<br>');
       const logoImg=(d.logo&&SHOW(key,'logo'))?'<img src="'+e(d.logo)+'" alt="">':'';
       const headerH=this._ivHeader(title,logoImg,co,bizLines);
       const metaH='<div class="iv-meta"><address class="iv-rinfo"><div class="iv-party-lbl">'+(isP?'SUPPLIER':'CUSTOMER')+'</div><strong>'+partyName+'</strong>'+partyAddr+'</address><div class="iv-mdiv"></div><dl class="iv-fields">'+fieldsH+'</dl></div>';
@@ -1430,18 +1441,46 @@ const App = {
     this._openOverlay('<div class="app-modal-h">Transaction journal — '+self.esc(rec.reference||(c&&c.singular)||'')+'</div><div class="app-modal-b"><table class="reg-tbl"><thead><tr><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>'+body+'</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td>'+(rows.length?(bal?'<span style="color:#0b6b49">Balanced ✓</span>':'<span style="color:#b42318">Out of balance</span>'):'')+'</td><td class="r m">'+self.money(dr)+'</td><td class="r m">'+self.money(cr)+'</td></tr></tfoot></table></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Close</button></div>'); },
 
   /* ----- copy to (create a related document) ----- */
-  _copyTargets:{ salesInv:['receipts','creditNotes','deliveryNotes','salesInv'], purchInv:['payments','debitNotes','purchInv'], salesQuote:['salesInv'], purchOrder:['purchInv'], creditNotes:['salesInv'], debitNotes:['purchInv'], receipts:['payments'], payments:['receipts'], journal:['journal'] },
+  /* Copy to — the Manager.io matrix. Party, lines (item, account, description, qty, price, tax), tax options and
+     reference are carried over; money/settlement state is not. */
+  _copyTargets:{ salesQuotes:['salesOrders','salesInv'], salesOrders:['salesInv','deliveryNotes'], salesInv:['receipts','creditNotes','deliveryNotes'],
+    purchQuotes:['purchOrders','purchInv'], purchOrders:['purchInv','goodsRec'], purchInv:['payments','debitNotes','goodsRec'],
+    creditNotes:['salesInv'], debitNotes:['purchInv'], receipts:['payments'], payments:['receipts'], journal:['journal'] },
   copyToMenu(){ var self=this; var key=LABEL2KEY[this.wsSection]; var targets=(this._copyTargets[key]||[]).filter(function(t){ return KEY2LABEL[t]; });
     if(!targets.length){ alert('There is nothing to copy this document to.'); return; }
     var btns=targets.map(function(t){ var lbl=(REG[t]&&REG[t].singular)||KEY2LABEL[t]||t; return '<button class="btn" style="justify-content:flex-start" onclick="App.copyTo(\''+t+'\')">▸ New '+self.esc(lbl)+'</button>'; }).join('');
-    this._openOverlay('<div class="app-modal-h">Copy to…</div><div class="app-modal-b"><div style="display:flex;flex-direction:column;gap:8px">'+btns+'</div></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Cancel</button></div>'); },
+    this._openOverlay('<div class="app-modal-h">Copy to…</div><div class="app-modal-b"><div style="display:flex;flex-direction:column;gap:8px">'+btns+'</div></div><div class="app-modal-f"><span style="flex:1"></span><button class="btn" onclick="App._closeOverlay()">Cancel</button></div>');
+    var ov=document.getElementById('appOverlay'); if(ov&&ov.setAttribute) ov.setAttribute('data-nav-close','1'); },
+  /* the prefill a "Copy to" opens the target form with (pure: no DOM) */
+  copyPrefill(b,key,rec,targetKey){ rec=rec||{};
+    var total=0; (rec.lines||[]).forEach(function(ln){ total+=Number(ln.amount||0)||0; }); if(!total) total=Number(rec.amount||rec.total||0)||0;
+    var isSale=function(k){ return ['salesQuotes','salesOrders','salesInv','creditNotes','deliveryNotes'].indexOf(k)>=0; };
+    var isPurch=function(k){ return ['purchQuotes','purchOrders','purchInv','debitNotes','goodsRec'].indexOf(k)>=0; };
+    if(key==='salesInv'&&targetKey==='receipts'&&typeof TxnForms!=='undefined') return TxnForms.receiptPrefill(b,rec);
+    if(key==='salesInv'&&targetKey==='receipts') return { date:rec.date, customer:rec.customer, paidBy:rec.customer, paidByType:'customer', receivedIn:'', lines:[{accountName:'Accounts receivable', sub:rec.customer, amount:total}] };
+    if(key==='purchInv'&&targetKey==='payments'){ var due=null; try{ var row=settlementIndex(b,'sup').byUid[invUid(rec)]; if(row) due=row.outstanding; }catch(e){}
+      if(due==null) due=(rec.balanceDue!=null&&rec.balanceDue!=='')?Number(rec.balanceDue):total; due=Math.round((Number(due)||0)*100)/100;
+      var ap=(b.coa||[]).find(function(n){ return n.type==='account'&&/^accounts payable$/i.test(n.name||''); }); var uid=invUid(rec);
+      return { date:new Date().toISOString().slice(0,10), payeeType:'supplier', payee:rec.supplier||rec.supName||'', supplier:rec.supplier||rec.supName||'',
+        description:'Payment for purchase invoice '+(rec.reference||''), lines:[{ account:ap?ap.id:'', accountName:'Accounts payable', sub:rec.supplier||rec.supName||'', amount:due, price:due }],
+        _keepAlloc:true, allocations:(due>0&&uid)?[{ key:'purchInv', uid:uid, party:rec.supplier||'', amount:due }]:[] }; }
+    var pf=JSON.parse(JSON.stringify(rec));
+    ['id','uuid','allocations','balanceDue','status','amount','_keepAlloc','withholdingAmt','paid'].forEach(function(k){ delete pf[k]; });
+    if(targetKey===key) delete pf.reference;
+    if(isSale(targetKey)){ pf.customer=rec.customer||rec.custName||''; if(pf.customer) pf.custName=pf.customer; }
+    if(isPurch(targetKey)){ pf.supplier=rec.supplier||rec.supName||''; if(pf.supplier) pf.supName=pf.supplier; }
+    if(pf.date==null&&pf.issueDate) pf.date=pf.issueDate; if(pf.issueDate==null&&pf.date) pf.issueDate=pf.date;
+    pf.lines=(rec.lines||[]).filter(function(ln){ return ln&&!ln.rounding; }).map(function(ln){ var o=JSON.parse(JSON.stringify(ln));
+      if(o.item==null&&o.items!=null) o.item=o.items; if(o.items==null&&o.item!=null) o.items=o.item;
+      if(o.desc==null&&o.description!=null) o.desc=o.description; if(o.description==null&&o.desc!=null) o.description=o.desc;
+      if((o.accountName==null||o.accountName==='')&&o.account){ try{ o.accountName=acctName(b,o.account)||''; }catch(e){} }
+      if(o.accounts==null&&o.accountName) o.accounts=o.accountName;
+      if((o.taxRate==null||o.taxRate==='')&&o.taxCode){ var tc=(b.taxCodes||[]).find(function(t){ return t&&t.name===o.taxCode; }); if(tc) o.taxRate=tc.rate; }
+      return o; });
+    pf.copiedFrom={ key:key, id:rec.id, reference:rec.reference||'' };
+    return pf; },
   copyTo(targetKey){ this._closeOverlay(); var b=this.curBiz(); var key=LABEL2KEY[this.wsSection]; var rec=this.records(b).find(r=>r.id===this.editingId); if(!rec) return; var label=KEY2LABEL[targetKey]; if(!label){ alert('Cannot copy to that document.'); return; }
-    var total=0; (rec.lines||[]).forEach(function(ln){ total+=Number(ln.amount||0)||0; }); if(!total) total=Number(rec.amount||0)||0;
-    var pf;
-    if(key==='salesInv'&&targetKey==='receipts'&&typeof TxnForms!=='undefined'){ pf=TxnForms.receiptPrefill(b,rec); }
-    else if(key==='salesInv'&&targetKey==='receipts'){ pf={ date:rec.date, customer:rec.customer, receivedIn:'', lines:[{accountName:'Accounts receivable', sub:rec.customer, amount:total}] }; }
-    else if(key==='purchInv'&&targetKey==='payments'){ pf={ date:rec.date, supplier:rec.supplier, paidFrom:'', lines:[{accountName:'Accounts payable', sub:rec.supplier, amount:total}] }; }
-    else { pf=JSON.parse(JSON.stringify(rec)); delete pf.id; delete pf.uuid; delete pf.reference; }
+    var pf=this.copyPrefill(b,key,rec,targetKey);
     this._prefill=pf; this.recReturn=null; this.histReturn=false; this.wsSection=label; this.editingId=null; this.wsMode='form'; this.renderWorkspace(); },
 
   /* ----- customer / supplier ledger ----- */
@@ -1819,7 +1858,7 @@ const App = {
   reportEdit(key,id){ this.repView=key; this.repMode='edit'; this.repInst=id; this.renderMain(this.curBiz()); },
   reportOpen(key,id){ this.repView=key; this.repMode='view'; this.repInst=id; this.renderMain(this.curBiz()); },
   reportClone(key,id){ var b=this.curBiz(); var inst=this._getInst(b,key,id); if(!inst) return; var cp=JSON.parse(JSON.stringify(inst)); cp.id=this._newReportId(); cp.title=(inst.title||'Report')+' (copy)'; b.reports[key]=b.reports[key]||[]; b.reports[key].push(cp); this.saveBiz(b); this.repView=key; this.repMode='edit'; this.repInst=cp.id; this.renderMain(b); },
-  reportDelete(key,id){ if(!confirm('Delete this report? This cannot be undone.')) return; var b=this.curBiz(); b.reports[key]=((b.reports&&b.reports[key])||[]).filter(function(r){ return String(r.id)!==String(id); }); this.saveBiz(b); this.repView=key; this.repMode='list'; this.repInst=null; this.renderMain(b); },
+  reportDelete(key,id){ if(!this._ask('Delete this report? This cannot be undone.',()=>this.reportDelete(key,id))) return; var b=this.curBiz(); b.reports[key]=((b.reports&&b.reports[key])||[]).filter(function(r){ return String(r.id)!==String(id); }); this.saveBiz(b); this.repView=key; this.repMode='list'; this.repInst=null; this.renderMain(b); },
   _applyEditForm(b,key,id){ var inst=this._getInst(b,key,id); if(!inst) return null; var g=function(i){ var el=document.getElementById(i); return el?el.value:''; }; var ck=function(i){ var el=document.getElementById(i); return el?el.checked:false; };
     inst.title=g('rp_title')||inst.title; inst.desc=g('rp_desc'); inst.from=g('rp_from'); inst.to=g('rp_to'); inst.colName=g('rp_col')||'Total';
     var m=document.getElementById('rp_method'); if(m) inst.method=m.value; var r=document.getElementById('rp_round'); if(r) inst.rounding=r.value;
@@ -2707,7 +2746,8 @@ const App = {
       var undo = e.synthetic ? '<span style="color:#c8c8c8;font-size:11px">—</span>'
         : (e.undone ? '<span style="color:#aaa;font-size:11px">undone</span>'
           : '<button class="btn btn-xs" onclick="App.historyUndo(\''+e.id+'\')">Undo</button>');
-      var desc = (e.action==='update'&&e.before) ? ('<span style="text-decoration:line-through;color:#b0b0b0">'+self.esc(self._recLabel(e.key,e.before))+'</span><br>'+self.esc(e.label)) : self.esc(e.label);
+      var desc = self.esc(e.label);
+      if(e.action==='update'&&e.before&&e.after){ var ch=self._histChanges(e.key,e.before,e.after); if(ch.length) desc+='<div class="hist-chg">'+ch.slice(0,3).map(function(c){ return '<b>'+self.esc(c.label)+'</b>: <span class="hist-old">'+self.esc(self._histVal(c.old))+'</span><span class="hist-arrow">→</span><span class="hist-new">'+self.esc(self._histVal(c.new))+'</span>'; }).join(' · ')+(ch.length>3?' · +'+(ch.length-3)+' more':'')+'</div>'; }
       return '<tr'+(e.undone?' style="opacity:.5"':'')+'>'+
         '<td class="act"><button class="btn btn-xs" onclick="App.historyView(\''+(e.id||(e.key+':'+e.recId))+'\')">View</button></td>'+
         '<td style="white-space:nowrap">'+self.esc(self._fmtTs(e.ts))+'</td>'+
@@ -2730,6 +2770,24 @@ const App = {
   historyBack(){ if(this.histReturn){ this.histReturn=false; this.histEntry=null; this.openTool('history'); return true; } return false; },
   historyUndoFromView(){ var e=this.histEntry; if(!e||e.synthetic||e.undone||!e.id) return; this.historyUndo(e.id); this.histReturn=false; this.histEntry=null; this.openTool('history'); },
   _humanKey(k){ return String(k).replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_]+/g,' ').replace(/^./,function(c){ return c.toUpperCase(); }); },
+  /* History: what a stored key is called on the form ("Customer", not "Cust Name") */
+  _HIST_LABELS:{ custName:'Customer', supName:'Supplier', empName:'Employee', custTRN:'Customer TRN', supTRN:'Supplier TRN', custAddress:'Billing address', supAddress:'Supplier address',
+    custEmail:'Email', supEmail:'Email', empEmail:'Email', custMobile:'Phone', supMobile:'Phone', custCode:'Code', supCode:'Code', empCode:'Code', empAddress:'Address', custBalance:'Starting balance', supBalance:'Starting balance', empBalance:'Starting balance',
+    narration:'Narration', amounts_in_word:'Amount in words', bank_accounts_detail:'Bank details', bankDetails:'Bank details', issueDate:'Date', date:'Date', dueDate:'Due date', dueDateManual:'Due date', dueDays:'Due in days', dueType:'Due date type',
+    receivedIn:'Received in', paidFrom:'Paid from', paidBy:'Paid by', paidByType:'Paid by (type)', payee:'Payee', payeeType:'Payee (type)', bankName:'Name', bankCode:'Code', bankIBAN:'IBAN', ibanNo:'IBAN', iban:'IBAN', hasIban:'International Bank Account Number (IBAN)', bankAcctNo:'Account number',
+    itemName:'Name', itemCode:'Code', itemUnit:'Unit name', itemSellPrice:'Sales price', itemPurchPrice:'Purchase price', itemQty:'Starting quantity', itemOpeningCost:'Starting cost', faName:'Name', faCode:'Code', faCost:'Acquisition cost', faDate:'Acquisition date', faDepRate:'Depreciation rate', faAccDep:'Accumulated depreciation',
+    capName:'Name', capCode:'Code', capDesc:'Description', capBalance:'Starting balance', balanceDue:'Balance due', subtotal:'Subtotal', tax:'Tax', total:'Total', amount:'Amount', reference:'Reference', description:'Description', withholdingAmt:'Withholding amount', roundingAmt:'Rounding amount', amountPaid:'Amount paid',
+    colLineNum:'Column — Line number', colItem:'Column — Item', showDescCol:'Column — Description', colQty:'Column — Qty', colDiscount:'Column — Discount', discType:'Discount type', colDivision:'Column — Division', rounding:'Rounding', roundMode:'Rounding mode', withholding:'Withholding tax', whtType:'Withholding tax type', whtRate:'Withholding tax rate', whtAmount:'Withholding amount', showTaxCol:'Show tax amount column', fixedTotal:'Fixed total', fixedTotalValue:'Fixed total amount', customTitleOn:'Custom title', customTitle:'Custom title text', hideDueDate:'Hide — Due date', hideBalanceDue:'Hide — Balance due', amountInWords:'Amount in words', taxInclusive:'Amounts are tax inclusive', taxExclusive:'Amounts are tax exclusive', creditLimitOn:'Credit limit', creditLimit:'Credit limit amount', pending:'Can have pending transactions' },
+  /* keys that mirror each other on one record: only the first one with a value is shown */
+  _HIST_MIRRORS:[['customer','custName'],['supplier','supName'],['employee','empName'],['date','issueDate'],['description','narration'],['name','bankName','itemName','faName','capName'],['code','bankCode','itemCode','faCode','capCode','custCode','supCode','empCode'],['iban','bankIBAN','ibanNo'],['amount','total'],['email','custEmail','supEmail','empEmail'],['address','custAddress','supAddress','empAddress'],['phone','custMobile','supMobile'],['trn','custTRN','supTRN'],['qty','itemQty'],['salesPrice','itemSellPrice'],['purchasePrice','itemPurchPrice'],['unit','itemUnit'],['openingCost','itemOpeningCost'],['bankAcctNo','accountNo','acctNo'],['paidBy','customer'],['payee','supplier'],['bankDetails','bank_accounts_detail'],['withholdingAmt','whtAmount']],
+  _histLabel(key,k){ var f=((REG[key]&&REG[key].form)||[]).find(function(x){ return x.key===k; }); if(f&&f.label) return f.label; return this._HIST_LABELS[k]||this._humanKey(k); },
+  _histVal(v){ if(v==null||v==='') return '(empty)'; if(v===true||v==='true') return 'Yes'; if(v===false||v==='false') return 'No'; var sv=String(v); if(/^\d{4}-\d{2}-\d{2}$/.test(sv)){ try{ return this.fmtDate?this.fmtDate(sv):sv; }catch(e){ return sv; } } return sv; },
+  /* the fields an update changed: [{label, old, new}] */
+  _histChanges(key,before,after){ var self=this; before=before||{}; after=after||{}; var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1,amounts_in_word:1,allocations:1,printOff:1};
+    var hide={}; this._HIST_MIRRORS.forEach(function(g){ var first=g.find(function(k){ return (after[k]!=null&&after[k]!=='')||(before[k]!=null&&before[k]!==''); }); g.forEach(function(k){ if(k!==first) hide[k]=1; }); });
+    var out=[], seen={}; Object.keys(Object.assign({},before,after)).forEach(function(k){ if(skip[k]||hide[k]||seen[k]) return; seen[k]=1; var o=before[k], n=after[k]; if((o!=null&&typeof o==='object')||(n!=null&&typeof n==='object')) return;
+      var os=(o==null?'':String(o)), ns=(n==null?'':String(n)); if(os===ns) return; out.push({k:k,label:self._histLabel(key,k),old:o,new:n}); });
+    return out; },
   histCrumb(){ return '<div class="ws-crumb"><div class="left">'+App._crumbIco()+' ▸ <a class="led-link" onclick="App.openTool(\'history\')">History</a> ▸ History</div></div>'; },
   histDetailHtml(b){ var self=this; var e=this.histEntry; if(!e) return this.historyHtml(b); var c=REG[e.key]||{};
     var liveRec=(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); }));
@@ -2737,20 +2795,22 @@ const App = {
     var isUpd=(e.action==='update' && e.before); var isDel=(e.action==='delete'); var base=isDel?before:after;
     var title=(c.singular||c.label||KEY2LABEL[e.key]||e.key);
     var isBoolKey=function(k){ return /Enabled$|^has|^Has|On$|Checked$|check/i.test(k); };
-    var fmtVal=function(k,v){ if(v===true||v==='true') return 'is checked'; if(v===false) return 'is not checked'; if((v==='1'||v===1)&&isBoolKey(k)) return 'is checked'; if((v===''||v==='0'||v===0)&&isBoolKey(k)) return 'is not checked'; return self.esc(v==null?'':String(v)); };
-    var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1};
+    var fmtVal=function(k,v){ if(v===true||v==='true') return 'is checked'; if(v===false) return 'is not checked'; if((v==='1'||v===1)&&isBoolKey(k)) return 'is checked'; if((v===''||v==='0'||v===0)&&isBoolKey(k)) return 'is not checked'; return self.esc(self._histVal(v)); };
+    var skip={lines:1,uuid:1,id:1,_dr:1,_cr:1,_subsNormalized:1,accountName:1,accounts:1,subAccount:1,amounts_in_word:1,printOff:1,allocations:1};
+    { var _src=Object.assign({},before,after); this._HIST_MIRRORS.forEach(function(g){ var first=g.find(function(k){ return _src[k]!=null&&_src[k]!==''; }); g.forEach(function(k){ if(k!==first) skip[k]=1; }); }); }
     var ks=[]; var seen={}; Object.keys(base||{}).forEach(function(k){ if(skip[k]||typeof base[k]==='object'||seen[k]) return; seen[k]=1; ks.push(k); });
     if(isUpd){ Object.keys(before||{}).forEach(function(k){ if(skip[k]||typeof before[k]==='object'||seen[k]) return; seen[k]=1; ks.push(k); }); }
     var rowLV=function(label,val,bold){ return '<tr><td style="font-weight:700;color:#222;white-space:nowrap;padding:3px 30px 3px 0;vertical-align:top">'+self.esc(label)+'</td><td style="padding:3px 0;color:#222'+(bold?';font-weight:700':'')+'">'+val+'</td></tr>'; };
-    var rowSym=function(sym,val,bold){ return '<tr><td style="color:#999;white-space:nowrap;padding:1px 30px 1px 8px;vertical-align:top">'+sym+'</td><td style="padding:1px 0'+(bold?';font-weight:700;color:#111':';color:#666')+'">'+val+'</td></tr>'; };
+    var shown={};
     var rowsH=ks.map(function(k){ var ov=before[k], nv=after[k]; var os=(ov==null?'':String(ov)), ns=(nv==null?'':String(nv));
-      if(isUpd && os!==ns){ var out=rowLV(self._humanKey(k),'',false); if(os!=='') out+=rowSym('\u2013', fmtVal(k,ov), false); if(ns!=='') out+=rowSym('+', fmtVal(k,nv), true); return out; }
-      var vs=isDel?os:ns; if(vs==='') return ''; return rowLV(self._humanKey(k), fmtVal(k, isDel?ov:nv), false);
+      var lbl=self._histLabel(e.key,k);
+      if(isUpd && os!==ns){ return rowLV(lbl,'<span class="hist-old">'+(os!==''?fmtVal(k,ov):'(empty)')+'</span><span class="hist-arrow">→</span><span class="hist-new">'+(ns!==''?fmtVal(k,nv):'(empty)')+'</span>',false); }
+      var vs=isDel?os:ns; if(vs==='') return ''; var fv=fmtVal(k, isDel?ov:nv); if(shown[lbl+'\u0001'+fv]) return ''; shown[lbl+'\u0001'+fv]=1; return rowLV(lbl, fv, false);
     }).filter(Boolean).join('');
     var linesArr=isDel?(before.lines||[]):(after.lines||[]); var linesH='';
     if(Array.isArray(linesArr)&&linesArr.length){ var lh=rowLV('Lines','',false);
       linesArr.forEach(function(ln,i){ lh+='<tr><td style="font-weight:700;color:#222;padding:4px 0 1px 14px">'+(i+1)+'</td><td></td></tr>';
-        [['item','Item'],['description','Line description'],['desc','Line description'],['accountName','Account'],['sub','Sub-account'],['qty','Qty'],['price','Unit price'],['net','Net'],['amount','Amount'],['debit','Debit'],['credit','Credit'],['taxRate','Tax %']].forEach(function(p){ var val=ln[p[0]]; if(val==null||val==='') return; lh+='<tr><td style="font-weight:600;color:#444;white-space:nowrap;padding:2px 30px 2px 30px;vertical-align:top">'+self.esc(p[1])+'</td><td style="padding:2px 0;color:#222">'+self.esc(String(val))+'</td></tr>'; }); });
+        var _ld={}; [['item','Item'],['items','Item'],['description','Line description'],['desc','Line description'],['accountName','Account'],['accounts','Account'],['sub','Sub-account'],['qty','Qty'],['price','Unit price'],['net','Amount'],['amount','Total'],['debit','Debit'],['credit','Credit'],['taxCode','Tax code'],['taxRate','Tax %']].forEach(function(p){ var val=ln[p[0]]; if(val==null||val==='') return; if(_ld[p[1]]) return; _ld[p[1]]=1; lh+='<tr><td style="font-weight:600;color:#444;white-space:nowrap;padding:2px 30px 2px 30px;vertical-align:top">'+self.esc(p[1])+'</td><td style="padding:2px 0;color:#222">'+self.esc(String(val))+'</td></tr>'; }); });
       linesH=lh; }
     var actions='<div style="margin-top:14px;display:flex;gap:10px;align-items:center">'+
       (liveRec?'<button class="btn btn-primary" onclick="App.historyEditRecord()">Edit</button>':'')+
@@ -2777,7 +2837,7 @@ const App = {
   historyEditRecord(){ var b=this.curBiz(); var e=this.histEntry; if(!e) return; var label=KEY2LABEL[e.key]; var rec=label?(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); })):null; if(rec&&label){ this.toolView=null; this.navTrail=[]; this.recReturn=null; this.wsSection=label; this.listQuery=''; this.editingId=rec.id; this.wsMode='form'; this.renderMain(b); } else alert('Record not found.'); },
   historyDeleteRecord(){ var b=this.curBiz(); var e=this.histEntry; if(!e) return; var label=KEY2LABEL[e.key]; var rec=label?(((b.records&&b.records[e.key])||[]).find(function(r){ return String(r.id)===String(e.recId)||(e.recUuid&&r.uuid===e.recUuid); })):null; if(!rec||!label){ alert('Record not found.'); return; } this.toolView=null; this.navTrail=[]; this.recReturn=null; this.wsSection=label; this.deleteRecord(rec.id); },
   historyUndo(id){ var b=this.curBiz(); var log=(b.activity||[]); var e=log.find(function(x){ return x.id===id; }); if(!e||e.undone) return;
-    if(!confirm('Undo this change?\n\n'+e.label+'\n\nThis cannot be redone.')) return;
+    if(!this._ask('Undo this change?\n\n'+e.label+'\n\nThis cannot be redone.',()=>this.historyUndo(id))) return;
     b.records=b.records||{}; var arr=(b.records[e.key]||[]).slice();
     if(e.bulkIds&&e.bulkIds.length){ var ids={}; e.bulkIds.forEach(function(x){ ids[x]=1; }); arr=arr.filter(function(r){ return !ids[r.id]; }); }
     else if(e.bulkDeleted&&e.bulkDeleted.length){ e.bulkDeleted.forEach(function(r){ arr.push(JSON.parse(JSON.stringify(r))); }); }
@@ -3458,7 +3518,7 @@ const App = {
       self.renderMain(b); };
     rd.readAsDataURL(f); },
   attachRemove(i){ var b=this.curBiz(); var f=(b.attachments||[])[i]; if(!f) return;
-    if(!confirm('Delete “'+f.name+'”? This cannot be undone.')) return;
+    if(!this._ask('Delete “'+f.name+'”? This cannot be undone.',()=>this.attachRemove(i))) return;
     b.attachments.splice(i,1); this.saveBiz(b); this.renderMain(b); },
 
   /* ---- obsolete features ---- */
@@ -3619,7 +3679,7 @@ const App = {
     if(this.ctrlEditId==='new'){ b.coa.push({id:'a'+Math.random().toString(36).slice(2,9),type:'account',name:name,code:'',parent:sec,balance:0,control:1,custCtrl:1,madeOf:made}); }
     else { const a=b.coa.find(x=>x.id===this.ctrlEditId); if(a){ a.name=name; a.parent=sec; a.madeOf=made; a.control=1; a.custCtrl=1; } }
     try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.ctrlEditId=null; this.renderMain(b); },
-  ctrlRemove(id){ const b=this.curBiz(); if(!b) return; const a=(b.coa||[]).find(x=>x.id===id); if(!a||!a.custCtrl) return; if(!confirm('Delete control account “'+(a.name||'')+'”?')) return; b.coa=b.coa.filter(x=>x.id!==id); try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.renderMain(b); },
+  ctrlRemove(id){ const b=this.curBiz(); if(!b) return; const a=(b.coa||[]).find(x=>x.id===id); if(!a||!a.custCtrl) return; if(!this._ask('Delete control account “'+(a.name||'')+'”?',()=>this.ctrlRemove(id))) return; b.coa=b.coa.filter(x=>x.id!==id); try{ refreshSummary(b); }catch(e){} this.saveBiz(b); this.renderMain(b); },
 
   set_footers(b){ const d=b.details||{};
     const inner='<div class="info-bar">This footer prints at the bottom of every voucher and invoice, below the totals. Use it for thank-you notes, return policies or registration details.</div>'+
@@ -3653,7 +3713,7 @@ const App = {
   fmtSave(b){ if(this.fmtForm && this.fmtDraft && this.wsMode==='settings') return; this.saveBiz(b); },
   commitFmtForm(){ const b=this.curBiz(); const key=this.fmtForm; if(!key||!this.fmtDraft) return; b.formConfig=b.formConfig||{}; b.formConfig[key]=JSON.parse(JSON.stringify(this.fmtDraft)); this.saveBiz(b); this.fmtDraft=JSON.parse(JSON.stringify(b.formConfig[key])); this.renderMain(b); },
   discardFmtForm(){ const b=this.curBiz(); const key=this.fmtForm; this.fmtDraft=null; this.cfgEnsure(b,key); this.entryOrderFor(b,key); this.gridFor(b,key); this.fmtDraft=JSON.parse(JSON.stringify(b.formConfig[key])); this.fmtSel=null; this.fmtColMenu=false; this.renderMain(b); },
-  backFromFmtForm(){ if(this.fmtDirty() && !confirm('You have unsaved changes. Discard them and leave?')) return; this.fmtDraft=null; this.openFmtCat(this.fmtCat); },
+  backFromFmtForm(){ if(this.fmtDirty() && !this._ask('You have unsaved changes. Discard them and leave?',()=>this.backFromFmtForm())) return; this.fmtDraft=null; this.openFmtCat(this.fmtCat); },
   set_themes(b){
     if(this.fmtForm){ return this.advDesignerHtml(b,this.fmtForm); }
     if(this.fmtCat==='form') return this.crumbThemes('Form Formatting')+'<div class="info-bar">Pick a form to customise its printed layout — choose which fields print, reorder &amp; resize line-item columns, and add your own custom fields.</div>'+this.formListHtml(b,'form')+'<div class="form-actions"><button class="btn" onclick="App.openThemesHub()">◀ Back to Custom Themes</button></div>';
@@ -3782,7 +3842,7 @@ const App = {
   wpSetPage(prop,val){ const b=this.curBiz(); const c=this.cfgEnsure(b,this.fmtForm); c.docPage=c.docPage||{size:'A4'}; c.docPage[prop]=val; const p=document.getElementById('wpPage'); if(p&&prop==='size') p.style.width=(val==='Letter'?'816px':'794px'); this.saveBiz(b); this.wpSaveNow(true); },
   wpAutoSave(){ clearTimeout(this._wpTimer); const s=document.getElementById('wpStatus'); if(s){ s.textContent='Saving…'; s.style.color='var(--warn)'; } this._wpTimer=setTimeout(()=>this.wpSaveNow(true),700); },
   wpSaveNow(silent){ const b=this.curBiz(); const p=document.getElementById('wpPage'); if(!p||!this.fmtForm) return; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=p.innerHTML; if(!c.docPage) c.docPage={size:'A4'}; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent=silent?'✓ Saved':'✓ All changes saved'; s.style.color='var(--success)'; } },
-  wpResetDoc(){ if(!confirm('Reset this voucher to the default layout? Your custom design will be replaced.')) return; const b=this.curBiz(); const def=this.wpDefaultDoc(b,this.fmtForm); const p=document.getElementById('wpPage'); if(p) p.innerHTML=def; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=def; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent='✓ Reset to default'; s.style.color='var(--success)'; } },
+  wpResetDoc(){ if(!this._ask('Reset this voucher to the default layout? Your custom design will be replaced.',()=>this.wpResetDoc())) return; const b=this.curBiz(); const def=this.wpDefaultDoc(b,this.fmtForm); const p=document.getElementById('wpPage'); if(p) p.innerHTML=def; const c=this.cfgEnsure(b,this.fmtForm); c.docHtml=def; this.saveBiz(b); const s=document.getElementById('wpStatus'); if(s){ s.textContent='✓ Reset to default'; s.style.color='var(--success)'; } },
   amountInWords(n,cur){ n=Number(n)||0; const neg=n<0; n=Math.abs(n); const whole=Math.floor(n); const cents=Math.round((n-whole)*100);
     const ones=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
     const tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
@@ -3911,7 +3971,7 @@ const App = {
   vbRerenderPreview(){ const p=document.getElementById('vbPreview'); if(p) p.innerHTML=this.vbPreviewHtml(this.curBiz(),this.fmtForm); const code=document.getElementById('vbCode'); if(code) code.value=this.vbCodeHtml(); },
   vbSync(){ const b=this.curBiz(); const c=this.vbCfg(); c.vdoc=this.vbModel(); this.saveBiz(b); const st=document.getElementById('vbStatus'); if(st){ st.textContent='\u2713 Saved'; st.style.color='var(--success)'; } },
   vbSaveNow(){ this.vbSync(); const st=document.getElementById('vbStatus'); if(st){ st.textContent='\u2713 All changes saved'; st.style.color='var(--success)'; } },
-  vbResetDoc(){ if(!confirm('Reset this voucher to the default theme? Your changes will be replaced.')) return; const c=this.vbCfg(); c.vdoc=this.vbDefaultModel(this.curBiz(),this.fmtForm); this.saveBiz(this.curBiz()); this.vbRerenderEditor(); },
+  vbResetDoc(){ if(!this._ask('Reset this voucher to the default theme? Your changes will be replaced.',()=>this.vbResetDoc())) return; const c=this.vbCfg(); c.vdoc=this.vbDefaultModel(this.curBiz(),this.fmtForm); this.saveBiz(this.curBiz()); this.vbRerenderEditor(); },
   vbBack(){ this.fmtForm=null; this.fmtDraft=null; this.openFmtCat(this.fmtCat||'voucher'); },
 
   fmtSampleRec(b,key){ const sc=this.formSchema(key); const tc=(b.taxCodes&&b.taxCodes[0])?b.taxCodes[0].name:''; const today=new Date().toISOString().slice(0,10); const due=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
@@ -4297,7 +4357,7 @@ const App = {
   coaDelete(id){ const b=this.curBiz(); const n=b.coa.find(x=>x.id===id); if(!n) return;
     if(n.mandatory||n.control){ alert('This account can\u2019t be deleted.'); return; }
     if(n.type==='group'&&b.coa.some(x=>x.parent===id)){ alert('Move or delete the accounts inside this group first.'); return; }
-    if(!confirm('Delete \u201c'+n.name+'\u201d?')) return;
+    if(!this._ask('Delete \u201c'+n.name+'\u201d?',()=>this.coaDelete(id))) return;
     b.coa=b.coa.filter(x=>x.id!==id);
     if(n.type==='total'&&b.coaTop){ ['bs','pl'].forEach(s=>{ b.coaTop[s]=b.coaTop[s].filter(x=>x!==id); }); }
     refreshSummary(b); this.saveBiz(b); this.coaCtx=null; this.renderMain(b); },

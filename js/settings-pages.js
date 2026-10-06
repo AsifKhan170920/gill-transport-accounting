@@ -39,7 +39,7 @@
       var t = document.createElement('div'); t.className = 'sp-toast'; t.textContent = msg; document.body.appendChild(t);
       setTimeout(function () { try { t.remove(); } catch (e) {} }, 2200); } catch (e) {}
   }
-  function ask(qs) { try { return typeof confirm === 'function' ? confirm(qs) : true; } catch (e) { return true; } }
+  function ask(qs, rerun) { try { if (typeof UIModal !== 'undefined' && UIModal.gate) return UIModal.gate(qs, rerun); return typeof confirm === 'function' ? confirm(qs) : true; } catch (e) { return true; } }
   function recs(b, key) { return (b && b.records && b.records[key]) || []; }
   function names(b, key) { return recs(b, key).map(function (r) { return r.name; }).filter(Boolean); }
 
@@ -818,7 +818,7 @@
       if (act === 'create' && def.onCreate) { go(CUR.key, CUR.sub, 'edit', res.record.id); return; }
       go(CUR.key, CUR.sub);
     },
-    remove: function () { if (!CUR || CUR.id == null) return; if (!ask('Delete this record?')) return;
+    remove: function () { if (!CUR || CUR.id == null) return; if (!ask('Delete this record?', function () { SettingsPages.remove(); })) return;
       deleteRecord(CUR.path, CUR.id); toast('Deleted'); go(CUR.key, CUR.sub); },
     recurRun: function (id) { var b = App.curBiz(); if (!b) return; var i = (b.recurring || []).findIndex(function (x) { return String(x.id) === String(id); });
       if (i < 0) return; App.recurRun(i); if (CUR) go(CUR.key, CUR.sub, 'edit', id); },

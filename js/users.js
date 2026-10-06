@@ -537,7 +537,7 @@
   }
   function denyMsg(what){ return 'You do not have access to ' + what + '. Ask an administrator to change your permissions.'; }
   function say(m){ try{ (global.alert || function(){})(m); }catch(e){} }
-  function ask(m){ try{ return global.confirm ? global.confirm(m) : true; }catch(e){ return true; } }
+  function ask(m,rerun){ try{ if(global.UIModal && global.UIModal.gate) return global.UIModal.gate(m,rerun); return global.confirm ? global.confirm(m) : true; }catch(e){ return true; } }
   /* Buttons whose onclick calls one of fns are removed from a rendered string. */
   function stripButtons(html, fns){
     if(!fns.length || typeof html !== 'string') return html;
@@ -771,7 +771,7 @@
     /* kept name: the old list's Remove button called this */
     removeUser:function(id){
       var u = userById(id); if(!u) return;
-      if(!ask('Delete user “' + (u.name || u.username) + '”?')) return;
+      var self=this; if(!ask('Delete user “' + (u.name || u.username) + '”?', function(){ self.removeUser(id); })) return;
       var r = deleteUser(id);
       if(!r.ok){ if(UF){ this._ufMsg = { error:r.error }; this.renderUserForm(); } else say(r.error); return; }
       UF = null; this._usersMsg = { info:'User deleted.' }; this.go('users');
@@ -894,7 +894,7 @@
     },
     permReset:function(){
       var d = this._permDraft, b = this.curBiz(); if(!d || !b) return;
-      if(!ask('Delete these user permissions? The user will have full access to this business.')) return;
+      var self=this; if(!ask('Delete these user permissions? The user will have full access to this business.', function(){ self.permReset(); })) return;
       if(b.userPermissions) delete b.userPermissions[d.userId];
       this.saveBiz(b); this._permDraft = null; this.renderMain(b);
     },

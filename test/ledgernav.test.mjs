@@ -107,11 +107,12 @@ describe('origin chain', () => {
     assert.ok(!seen.includes('Receipts:102'), 'the ENBD receipt is not on the ADCB ledger');
     App.lnNav('first'); assert.equal(App.editingId, 301);
   });
-  test('Delete returns to the origin', () => {
+  test('Delete returns to the origin', async () => {
     App.ledgerOpen('payments', 201, 'view');
     App.editRecord(201);
     ctx.confirm = () => true; ctx.window.confirm = () => true;
     App.deleteRecord(201);
+    await new Promise((r) => setTimeout(r, 0));   /* the delete confirmation is an app modal (UIModal.gate) */
     assert.equal(App.wsMode, 'ledger'); assert.equal(App.ledgerId, 1);
   });
   test('Invoice -> Copy to -> Receipt -> Create returns to the invoice view', () => {

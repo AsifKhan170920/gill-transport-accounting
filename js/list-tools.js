@@ -166,7 +166,7 @@
     });
     customDefs(b, key).forEach(function (x) {
       var num = x.dataType === 'number' || x.dataType === 'formula';
-      add({ key: 'cf:' + x.key, label: App.capLabel(x.label), kind: num ? 'num' : 'text', r: num ? 1 : 0, custom: 1,
+      add({ key: 'cf_' + x.key, label: App.capLabel(x.label), kind: num ? 'num' : 'text', r: num ? 1 : 0, custom: 1,
         calc: function (r) { return r && r.custom && r.custom[x.key] != null ? r.custom[x.key] : ''; } });
     });
     add({ key: '__ledger', label: (key && LED[key]) ? 'Ledger' : 'Journal', kind: 'ledger' });
@@ -179,6 +179,8 @@
   /* default columns: the built-in ones, minus those empty in every row (the
      tab's main amount column always stays, so a missing figure is visible) */
   App._defaultColKeys = function (c, b, rows) {
+    /* a tab with Manager's own default selection (REG.<key>.defaultCols) shows exactly that */
+    if (c && Array.isArray(c.defaultCols) && c.defaultCols.length) return c.defaultCols.slice();
     rows = rows || ((b && b.records && b.records[sectionKeyOf(c)]) || []);
     return (c.columns || []).filter(function (col) {
       if (!rows.length || col.key === c.totalCol || col.key === 'name') return true;
@@ -193,7 +195,7 @@
     var pool = this._colPool(c, b), byKey = {};
     pool.forEach(function (col) { byKey[col.key] = col; });
     var saved = (b && b.details && b.details.listCols && b.details.listCols[key]) || null;
-    var keys = (saved && saved.length) ? saved : this._defaultColKeys(c, b);
+    var keys = (saved && saved.length) ? saved.map(function (k) { return String(k).indexOf('cf:') === 0 ? 'cf_' + String(k).slice(3) : k; }) : this._defaultColKeys(c, b);
     var out = []; keys.forEach(function (k) { if (byKey[k]) out.push(byKey[k]); });
     if (!out.length) out = (c.columns || []).map(function (col) { return byKey[col.key]; }).filter(Boolean);
     return out;
@@ -511,7 +513,7 @@
       }).length;
       if (locked) { modalAlert(locked + ' of the selected ' + (c.label || 'records').toLowerCase() + ' are dated on or before the lock date (' + this.fmtDateUS(lk) + ') and can’t be deleted while the period is locked. Update Settings → Lock Date first.'); return Promise.resolve(false); }
     }
-    return modalConfirm('Delete ' + ids.length + ' ' + noun + '? This cannot be undone.', { title: 'Delete ' + (c.label || 'records'), danger: true, okText: 'Delete' }).then(function (ok) {
+    return modalConfirm('Delete ' + ids.length + ' selected ' + noun + '?\n\nThis can be undone from History.', { title: 'Delete ' + (c.label || 'records'), danger: true, okText: 'Delete' }).then(function (ok) {
       if (!ok) return false;
       var idset = {}; ids.forEach(function (i) { idset[i] = 1; });
       var arr = (b.records && b.records[key]) || [];
@@ -541,12 +543,12 @@
   /* editable fields for Batch Update: form fields + plain columns + custom fields */
   App._updateFields = function (c, b) {
     var out = this._importFields(c).filter(function (f) { return !OPT_KEYS[f.key] && f.type !== 'check'; });
-    customDefs(b, sectionKeyOf(c)).forEach(function (x) { if (x.dataType === 'formula') return; out.push({ key: 'cf:' + x.key, label: x.label, type: x.dataType === 'number' ? 'number' : 'text' }); });
+    customDefs(b, sectionKeyOf(c)).forEach(function (x) { if (x.dataType === 'formula') return; out.push({ key: 'cf_' + x.key, label: x.label, type: x.dataType === 'number' ? 'number' : 'text' }); });
     return out;
   };
   function csvCell(v) { var s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-  function fieldGet(r, f) { if (f.key.indexOf('cf:') === 0) { var k = f.key.slice(3); return r.custom && r.custom[k] != null ? r.custom[k] : ''; } return r[f.key]; }
-  function fieldSet(r, f, v) { if (f.key.indexOf('cf:') === 0) { r.custom = r.custom || {}; r.custom[f.key.slice(3)] = v; } else r[f.key] = v; }
+  function fieldGet(r, f) { if (f.key.indexOf('cf_') === 0) { var k = f.key.slice(3); return r.custom && r.custom[k] != null ? r.custom[k] : ''; } return r[f.key]; }
+  function fieldSet(r, f, v) { if (f.key.indexOf('cf_') === 0) { r.custom = r.custom || {}; r.custom[f.key.slice(3)] = v; } else r[f.key] = v; }
 
   App.batchUpdateCsv = function () {
     var b = this.curBiz(), c = this.cfg(), fields = this._updateFields(c, b);

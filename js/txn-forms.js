@@ -47,15 +47,15 @@
   var OPTS = {
     money: [['colLineNum','Column — Line number'],['colItem','Column — Item'],['showDescCol','Column — Description'],
             ['colQty','Column — Qty'],['colDiscount','Column — Discount'],['colDivision','Column — Division'],
-            ['taxExclusive','Amounts are tax exclusive'],['showTaxCol','Show tax amount column'],['fixedTotal','Fixed total']],
+            ['taxExclusive','Amounts are tax inclusive'],['showTaxCol','Show tax amount column'],['fixedTotal','Fixed total']],
     inv:   [['colLineNum','Column — Line number'],['colItem','Column — Item'],['showDescCol','Column — Description'],
-            ['colDiscount','Column — Discount'],['colDivision','Column — Division'],['taxInclusive','Amounts are tax inclusive'],
+            ['colQty','Column — Qty'],['colDiscount','Column — Discount'],['colDivision','Column — Division'],['taxInclusive','Amounts are tax inclusive'],
             ['rounding','Rounding'],['withholding','Withholding tax'],['showTaxCol','Show tax amount column'],['fixedTotal','Fixed total'],
             ['customTitleOn','Custom title'],['hideDueDate','Hide — Due date'],['hideBalanceDue','Hide — Balance due'],
             ['amountInWords','Amount in words']]
   };
   var OPT_KEYS = ['colLineNum','colItem','showDescCol','colQty','colDiscount','discType','colDivision','taxExclusive','taxInclusive',
-    'rounding','roundMode','withholding','whtAmount','showTaxCol','fixedTotal','fixedTotalValue','customTitleOn','customTitle',
+    'rounding','roundMode','withholding','whtType','whtRate','whtAmount','showTaxCol','fixedTotal','fixedTotalValue','customTitleOn','customTitle',
     'hideDueDate','hideBalanceDue','amountInWords'];
   var NAV_DEF = { enter:true, arrows:true, lastToSave:false, autoLine:true, newLine:true };
 
@@ -203,6 +203,7 @@
     if(t.showDescCol==null) t.showDescCol = inv || lines.some(function(ln){ return !blank(ln.desc!=null?ln.desc:ln.description); });
     if(t.showTaxCol==null) t.showTaxCol = inv;
     if(!inv && t.colQty==null) t.colQty = lines.some(function(ln){ return !blank(ln.qty) && num(ln.qty)!==1; });
+    if(inv && t.colQty==null) t.colQty = true;
     if(!inv && t.taxExclusive==null) t.taxExclusive = designed && lines.some(function(ln){ return num(ln.taxAmt) || num(ln.taxRate); });
     if(inv && t.taxInclusive==null) t.taxInclusive=false;
     if(inv && t.amountInWords==null) t.amountInWords=true;
@@ -238,7 +239,7 @@
 
   /** qty x price, % or exact discount, inclusive / exclusive tax — the source's lineCalc */
   function lineCalc(b,t,l){
-    var inv=isInv(t), qtyOn=inv || !!t.colQty;
+    var inv=isInv(t), qtyOn=qtyCol(t);
     var qty=qtyOn ? (blank(l.qty) ? 1 : num(l.qty)) : 1;
     var gross=qtyOn ? qty*num(l.price) : num(l.price);
     var disc=0; if(t.colDiscount && num(l.discount)) disc = t.discType==='Exact amount' ? num(l.discount) : gross*num(l.discount)/100;
@@ -249,6 +250,10 @@
     if(excl){ net=gross; tax=r2(net*rate); } else { tax=r2(gross*rate/(1+rate)); net=r2(gross-tax); }
     return { qty:qty, disc:r2(disc), gross:gross, net:net, tax:tax, total:r2(net+tax), rate:ti.rate||0 };
   }
+  /** the Qty column: optional on every form (on by default for invoices) */
+  function qtyCol(t){ return isInv(t) ? t.colQty!==false : !!t.colQty; }
+  /** withholding tax: a rate on the net amount, or an exact amount */
+  function whtOf(t,net){ if(!t.withholding) return 0; return r2(t.whtType==='Rate' ? net*num(t.whtRate)/100 : num(t.whtAmount)); }
   function totals(b,t){
     var lines=(t.lines||[]).map(function(l){ return { l:l, c:lineCalc(b,t,l) }; });
     var taxes={}, order=[];
@@ -258,9 +263,9 @@
     if(isInv(t) && t.rounding){ var m=t.roundMode||'Round to nearest';
       if(m==='Round to nearest') rnd=r2(Math.round(total)-total); else if(m==='Round down') rnd=r2(Math.floor(total)-total); }
     total=r2(total+rnd);
-    var wht=t.withholding ? r2(num(t.whtAmount)) : 0;
+    var wht=whtOf(t,net);
     return { lines:lines, taxes:taxes, taxOrder:order, net:net, tax:tax, rnd:rnd, wht:wht, total:total,
-             diff:t.fixedTotal ? r2(num(t.fixedTotalValue)-total) : 0 };
+             balance:r2(total-wht), diff:t.fixedTotal ? r2(num(t.fixedTotalValue)-total) : 0 };
   }
   function usedLines(t){ return (t.lines||[]).filter(function(l){ return num(l.price) || !blank(l.account) || !blank(l.item) || !blank(l.desc) || num(l.qty) || !blank(l.sub); }); }
 
@@ -302,7 +307,7 @@
     var lines=used.map(function(l){
       var c=lineCalc(b,t,l), node=acctById(b,l.account), hid=taxHidden(b,t,l), code=hid?'':(l.taxCode||'');
       var o={ item:l.item||'', account:l.account||'', accountName:node?node.name:'', sub:subClassOf(b,l.account)?(l.sub||''):'',
-              desc:l.desc||'', description:l.desc||'', qty:(inv||t.colQty)?(blank(l.qty)?(inv?1:''):num(l.qty)):'',
+              desc:l.desc||'', description:l.desc||'', qty:qtyCol(t)?(blank(l.qty)?(inv?1:''):num(l.qty)):'',
               price:num(l.price), discount:t.colDiscount?(blank(l.discount)?'':num(l.discount)):'',
               net:c.net, amount:c.total, taxAmt:c.tax, tax:code, taxCode:code, taxRate:code?c.rate:'' };
       if(!blank(l.division)) o.division=l.division;
@@ -320,7 +325,7 @@
       rec.dueType=t.dueType||'Net'; rec.dueDays=t.dueType==='By'?'':(blank(t.dueDays)?'':num(t.dueDays)); rec.dueDateManual=t.dueType==='By'?(t.dueDateManual||''):'';
       rec.dueDate=t.dueType==='By' ? (t.dueDateManual||'') : (blank(t.dueDays)?'':addDays(t.date,num(t.dueDays)));
       rec.taxInclusive=!!t.taxInclusive; rec.balanceDue=T.total; rec.roundingAmt=T.rnd||0;
-      if(t.withholding) rec.withholdingAmt=T.wht;
+      if(t.withholding){ rec.withholdingAmt=T.wht; rec.balanceDue=T.balance; }
     } else {
       rec.date=t.date; rec[S.bankField]=t.bank; rec[S.partyField]=t.party||''; rec[S.typeField]=t.partyType||'other';
       rec.amount=T.total; rec.taxExclusive=!!t.taxExclusive;
@@ -383,6 +388,9 @@
       var h=L.querySelector('.hi'); if(h && h.scrollIntoView) try{ h.scrollIntoView({ block:'nearest' }); }catch(e){} };
     if(seed) q.value=seed;
     draw(); try{ q.focus({ preventScroll:true }); }catch(e){}
+    /* flip: near the bottom of the viewport the list opens upward */
+    var vh=global.innerHeight||768, ph=p.offsetHeight||0;
+    if(ph && rc.bottom+ph+4>vh && rc.top-ph-4>=0){ p.style.top=(rc.top+sy-ph-2)+'px'; p.classList.add('cb-up'); }
     q.oninput=function(){ hi=0; draw(); };
     q.onkeydown=function(e){ var max=cur.length-(canAdd?0:1);
       if(e.key==='ArrowDown'){ hi=Math.min(max,hi+1); draw(); e.preventDefault(); }
@@ -455,15 +463,15 @@
   function columns(b,t){
     var inv=isInv(t), C=[];
     var anyTax=taxCodes(b).length && (inv || t.lines.some(function(l){ return !taxHidden(b,t,l); }));
-    var divs=(b.divisions||[]).length && t.colDivision;
+    var divs=!!t.colDivision;
     if(t.colLineNum) C.push({k:'lno',th:'#'});
     if(t.colItem) C.push({k:'item',th:'Item'});
     C.push({k:'account',th:'Account'});
     if(t.showDescCol) C.push({k:'desc',th:'Description'});
-    if(inv || t.colQty) C.push({k:'qty',th:'Qty',num:1});
-    C.push({k:'price',th:(inv||t.colQty)?'Unit price':'Amount',num:1});
+    if(qtyCol(t)) C.push({k:'qty',th:'Qty',num:1});
+    C.push({k:'price',th:qtyCol(t)?'Unit price':'Amount',num:1});
     if(t.colDiscount) C.push({k:'discount',th:'Discount'+(t.discType==='Exact amount'?'':' %'),num:1});
-    if(inv) C.push({k:'sub',th:'Total',num:1});
+    if(inv) C.push({k:'sub',th:'Amount',num:1});
     if(divs) C.push({k:'division',th:'Division'});
     if(anyTax) C.push({k:'tax',th:'Tax Code'});
     if(t.showTaxCol && anyTax) C.push({k:'taxAmt',th:'Tax amount',num:1});
@@ -504,19 +512,21 @@
           case 'taxAmt': return '<td class="num tot" data-tax="'+i+'">'+pre+money(lc.tax)+'</td>';
           case 'total': return '<td class="num tot" data-tot="'+i+'">'+pre+money(lc.total)+'</td>';
         } return '<td>'+pre+'</td>'; }).join('')+
-        '<td class="act"><button type="button" tabindex="-1" title="Move up" onclick="TxnForms._mv('+i+',-1)">↑</button><button type="button" tabindex="-1" title="Move down" onclick="TxnForms._mv('+i+',1)">↓</button><button type="button" tabindex="-1" title="Remove line" onclick="TxnForms._rm('+i+')">×</button></td></tr>'; }).join('');
-    var span=C.length-1, incl=inv ? !!t.taxInclusive : !t.taxExclusive;
-    var fr=function(lbl,val,id,cls){ return '<tr'+(cls?' class="'+cls+'"':'')+'><td colspan="'+span+'" class="num">'+lbl+'</td><td class="num"'+(id?' id="'+id+'"':'')+'>'+val+'</td><td></td></tr>'; };
+        '<td class="act"><button type="button" tabindex="-1" title="Move up" onclick="TxnForms._mv('+i+',-1)">↑</button><button type="button" tabindex="-1" title="Move down" onclick="TxnForms._mv('+i+',1)">↓</button><button type="button" tabindex="-1" title="Duplicate line" onclick="TxnForms._dup('+i+')">⧉</button><button type="button" tabindex="-1" title="Remove line" onclick="TxnForms._rm('+i+')">×</button></td></tr>'; }).join('');
+    var incl=inv ? !!t.taxInclusive : !t.taxExclusive;
+    var fr=function(lbl,val,id,cls){ return '<div class="tf-tr'+(cls?' '+cls:'')+'"><span class="tf-tl">'+lbl+'</span><span class="tf-tv num"'+(id?' id="'+id+'"':'')+'>'+val+'</span></div>'; };
     var foot='';
     if(!incl || T.taxOrder.length) foot+=fr('Subtotal',money(T.net),'txSub');
-    T.taxOrder.forEach(function(k){ foot+='<tr class="taxr" data-taxr="'+esc(k)+'"><td colspan="'+span+'" class="num">'+esc(k)+(incl?' (included)':'')+'</td><td class="num">'+money(T.taxes[k])+'</td><td></td></tr>'; });
+    T.taxOrder.forEach(function(k){ foot+='<div class="tf-tr taxr" data-taxr="'+esc(k)+'"><span class="tf-tl">'+esc(k)+(incl?' (included)':'')+'</span><span class="tf-tv num">'+money(T.taxes[k])+'</span></div>'; });
     if(inv && t.rounding) foot+=fr('Rounding',money(T.rnd),'txRnd');
     foot+=fr('Total',money(T.total),'txTotal','grand');
-    if(inv && t.withholding) foot+=fr('Withholding tax',hdrNum('whtAmount',t.whtAmount),'');
+    if(inv && t.withholding){ var wt=t.whtType==='Rate'?'Rate':'Amount';
+      foot+=fr('Withholding tax '+SEL('whtType',wt,[['Amount','Exact amount'],['Rate','Rate %']],{w:'130px'})+(wt==='Rate'?hdrNum('whtRate',t.whtRate):hdrNum('whtAmount',t.whtAmount)),'-'+money(T.wht),'txWht','wht');
+      if(!t.hideBalanceDue) foot+=fr('Balance due',money(T.balance),'txBal','grand'); }
     if(t.fixedTotal){ foot+=fr('Fixed total',hdrNum('fixedTotalValue',t.fixedTotalValue),'');
       foot+=fr('Difference','<span class="'+(T.diff?'tf-neg':'')+'">'+money(T.diff)+'</span>','txDiff'); }
-    return '<div class="lines-wrap"><table class="tx-ln" data-line-items><thead>'+head+'</thead><tbody>'+rows+'</tbody><tfoot>'+foot+'</tfoot></table></div>'+
-      '<button type="button" class="btn btn-sm tf-add" onclick="TxnForms._addLine()">▸ Add line</button>';
+    return '<div class="lines-wrap"><table class="tx-ln" data-line-items><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'+
+      '<div class="tf-under"><button type="button" class="btn btn-sm tf-add" onclick="TxnForms._addLine()">▸ Add line</button><div class="tf-totals">'+foot+'</div></div>';
   }
   function optsHtml(b,t){
     var list=OPTS[isInv(t)?'inv':'money'];
@@ -524,10 +534,12 @@
       colDiscount:function(){ return SEL('discType',t.discType||'Percentage',['Percentage','Exact amount']); },
       rounding:function(){ return SEL('roundMode',t.roundMode||'Round to nearest',['Round to nearest','Round down']); },
       customTitleOn:function(){ return IN('customTitle',t.customTitle,{ph:SPEC[t.key].singular}); },
-      colDivision:function(){ return (b.divisions||[]).length?'':'<span class="tf-hint">Add divisions in Settings → Divisions.</span>'; }
+      colDivision:function(){ return (b.divisions||[]).length?'':'<span class="tf-hint">No divisions yet — add them in <a class="led-link" onclick="App.openSetting(\'divisions\')">Settings → Divisions</a>.</span>'; }
     };
     return '<div class="tf-opts">'+list.map(function(o){ var k=o[0];
-      return '<label class="tf-chk"><input type="checkbox" data-opt="'+k+'"'+(t[k]?' checked':'')+' onchange="TxnForms._opt(\''+k+'\',this.checked)">'+esc(o[1])+'</label>'+
+      if(k==='taxExclusive') return '<label class="tf-chk"><input type="checkbox" data-opt="taxInclusive"'+(!t.taxExclusive?' checked':'')+' onchange="TxnForms._opt(\'taxExclusive\',!this.checked)">'+esc(o[1])+'</label>';
+      var on=(k==='colQty'&&isInv(t))?t.colQty!==false:!!t[k];
+      return '<label class="tf-chk"><input type="checkbox" data-opt="'+k+'"'+(on?' checked':'')+' onchange="TxnForms._opt(\''+k+'\',this.checked)">'+esc(o[1])+'</label>'+
         (t[k] && reveal[k] ? '<div class="tf-reveal">'+reveal[k]()+'</div>' : ''); }).join('')+'</div>';
   }
   function actionsHtml(b,t){
@@ -555,7 +567,7 @@
     cbSeq=0; CB={};
     var crumb=''; try{ crumb=A.recCrumb(R.label||key2label()[t.key], title); }catch(e){}
     return crumb+'<div class="card tf-card" id="txHost" data-enter-nav="off" data-tx-key="'+t.key+'">'+
-      '<div class="tf-card-h"><h2>'+esc(S.singular)+'</h2>'+(t.mode==='edit'&&t.uuid?'<span class="tf-uid">'+esc(t.uuid)+'</span>':'')+'</div>'+
+      '<div class="tf-card-h"><h2>'+esc(S.singular)+'</h2></div>'+
       '<div id="txErr"></div><div id="txHead">'+headHtml(b,t)+'</div>'+
       '<div id="txLines" class="li-wrap tf-lines">'+linesHtml(b,t)+'</div>'+
       '<div id="txOpts">'+optsHtml(b,t)+'</div>'+
@@ -591,7 +603,8 @@
     T.lines.forEach(function(x,i){ set('[data-tot="'+i+'"]',money(x.c.total)); set('[data-tax="'+i+'"]',money(x.c.tax)); set('[data-sub="'+i+'"]',money(x.c.gross));
       var hv=host.querySelector('[data-hid-tot="'+i+'"]'); if(hv) hv.value=x.c.total; });
     set('#txSub',money(T.net)); set('#txRnd',money(T.rnd)); set('#txTotal',money(T.total));
-    host.querySelectorAll('tr.taxr').forEach(function(tr){ var k=tr.getAttribute('data-taxr'); var c=tr.children[1]; if(c) c.textContent=money(T.taxes[k]||0); });
+    set('#txWht','-'+money(T.wht)); set('#txBal',money(T.balance));
+    host.querySelectorAll('.taxr').forEach(function(tr){ var k=tr.getAttribute('data-taxr'); var c=tr.children[1]; if(c) c.textContent=money(T.taxes[k]||0); });
     var df=host.querySelector('#txDiff'); if(df){ df.innerHTML='<span class="'+(T.diff?'tf-neg':'')+'">'+money(T.diff)+'</span>'; }
   }
   function setParty(v){ TX.party=v||''; var b=cur(); defaultCtrlLine(b);
@@ -741,6 +754,7 @@
     _cbOpen:function(id,btn){ cbOpen(id,btn,''); },
     _cbPick:function(e,id,v){ if(e){ e.stopPropagation(); e.preventDefault && e.preventDefault(); } cbClose(); var c=CB[id]; if(c) c.pick(v); },
     _addLine:function(){ addLine(); },
+    _dup:function(i){ if(!TX||!TX.lines[i]) return; TX.lines.splice(i+1,0,clone(TX.lines[i])); draw(); },
     _rm:function(i){ TX.lines.splice(i,1); if(!TX.lines.length) TX.lines.push(blankLine(TX)); draw(); },
     _mv:function(i,d){ var A=TX.lines, j=i+d; if(j<0||j>=A.length) return; var x=A[i]; A[i]=A[j]; A[j]=x; draw(); },
     _pickItem:function(i,v){ pickItem(i,v); }, _switchAccount:function(i,v){ switchAccount(i,v); },
