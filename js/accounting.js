@@ -531,3 +531,26 @@ function periodOf(b){ const p=Object.assign({}, (b&&b.period)||{mode:'ytd'}); co
   if(d && p.mode!=='custom'){ p.from=d[0]; p.to=d[1]; } if(!p.from||!p.to){ const y=presetPeriod('ytd'); p.from=p.from||y[0]; p.to=p.to||y[1]; } return p; }
 /* Accounts receivable and payable exist from day one, so the first receipt or payment can use them. */
 function ensureCoreAccounts(b){ if(!b||!b.coa) return; try{ GL.sysAcct(b,'accounts receivable',true); GL.sysAcct(b,'accounts payable',true); }catch(e){} }
+/* ---------- customer / supplier list figures ---------- */
+/** How many receipts (payments) and sales (purchase) invoices a customer (supplier) has. */
+function partyDocCounts(b,side,name){ const R=(b&&b.records)||{}; const cust=side!=='sup';
+  const cashKey=cust?'receipts':'payments', invKey=cust?'salesInv':'purchInv', pf=cust?'paidBy':'payee', field=cust?'customer':'supplier', re=cust?AR_RE:AP_RE;
+  const cash=(R[cashKey]||[]).filter(r=>{ if(!r) return false; if((r.lines||[]).some(l=>l&&l.sub===name&&acctNameMatches(b,l.account,re))) return true;
+    return r[pf]===name && String(r[cust?'paidByType':'payeeType']||'').toLowerCase()===(cust?'customer':'supplier'); }).length;
+  const inv=(R[invKey]||[]).filter(i=>i&&i[field]===name).length;
+  return {cash,inv}; }
+/** Paid / Unpaid / Overpaid from the ledger balance. */
+function partyStatus(bal){ bal=Math.round((Number(bal)||0)*100)/100; return bal>0?'Unpaid':(bal<0?'Overpaid':'Paid'); }
+/** A payslip's net pay as its view shows it: earnings − deductions (contributions excluded). */
+function payslipNetPay(p){ if(!p) return 0; const lns=(p.lines||[]).filter(l=>l);
+  if(!lns.length) return Number(p.netPay!=null&&p.netPay!==''?p.netPay:p.total)||0;
+  let net=0; lns.forEach(l=>{ const a=Number(l.amount!=null&&l.amount!==''?l.amount:(l.net!=null&&l.net!==''?l.net:l.amountNoTax))||0; const t=String(l.ptype||l.type||'').toLowerCase();
+    if(t==='contribution') return; if(t==='deduction'||a<0) net-=Math.abs(a); else net+=a; });
+  return Math.round(net*100)/100; }
+/** Quantity of an item held at one inventory location. Transfers move stock between
+    locations; everything else (purchases, sales, write-offs ...) happens at Main location. */
+function invQtyAtLocation(b,itemName,loc){ const it=((b.records&&b.records.inventory)||[]).find(x=>x&&x.name===itemName); if(!it) return 0;
+  const isMain=!loc||/^main location$/i.test(loc);
+  if(!isMain) return Math.round(((invQtyByLocation(b,loc)[itemName])||0)*1e6)/1e6;
+  const names={}; ((b.records&&b.records.invTransfers)||[]).forEach(t=>{ [t.fromLocation,t.toLocation].forEach(l=>{ if(l&&!/^main location$/i.test(l)) names[l]=1; }); });
+  let q=invItemStats(b,it).qtyOnHand; Object.keys(names).forEach(l=>{ q-=(invQtyByLocation(b,l)[itemName]||0); }); return Math.round(q*1e6)/1e6; }

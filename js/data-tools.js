@@ -83,6 +83,49 @@
     if(before){ var c=REG[key]; if(c&&c.lines && Math.abs(headerTotal(key,before))>0.005 && Math.abs(linesTotal(key,rec))<0.005 && !(rec.lines||[]).length) return GUARD_MSG; }
     return null; };
 
+  /** Control / system accounts kept out of line account dropdowns (#68). Journal entries may use any account;
+      Cash & cash equivalents is a journal-only line account (banks are picked as its sub-account). */
+  App.lineAccountHidden=function(b,id,key){ var n=(b&&b.coa||[]).find(function(x){ return x&&x.id===id; }); if(!n) return false; if(key==='journal') return false;
+    if(n.cashControl || /^cash & cash equivalents$/i.test(n.name||'')) return true;
+    if(/^retained earnings$/i.test(n.name||'') || n.sbeControl || /^starting balance equity$/i.test(n.name||'') || n.suspenseControl || /^suspense$/i.test(n.name||'')) return true;
+    return false; };
+
+  /* ---------------- designed forms: small behaviours the templates lack ---------------- */
+  function fv(host,k){ return host.querySelector('[data-field-var="'+k+'"]'); }
+  function warnBox(host,id){ var w=host.querySelector('#'+id); if(!w){ w=document.createElement('div'); w.id=id; w.className='info-bar data-guard'; w.style.display='none'; host.appendChild(w); } return w; }
+  App._enhanceDesigned=function(host,key){ var b=App.curBiz(); if(!b||!host) return; var R=b.records||{};
+    /* #69 withholding tax receipt: the sales invoice is picked from that customer's invoices */
+    if(key==='whtReceipts'){ var inp=fv(host,'invoice'), cs=fv(host,'custName'); if(inp && inp.tagName!=='SELECT'){
+        var sel=document.createElement('select'); sel.setAttribute('data-field-var','invoice'); sel.className=inp.className; var keep=inp.value;
+        var fill=function(){ var c=cs?cs.value:''; var inv=(R.salesInv||[]).filter(function(i){ return i && (!c || i.customer===c); });
+          var h='<option value="">— select invoice —</option>'+inv.map(function(i){ return '<option value="'+esc(i.reference)+'">'+esc(i.reference)+' — '+esc(App.fmtDate(i.issueDate||i.date))+' — '+App.money(i.total)+(Number(i.balanceDue)>0.005?' (due '+App.money(i.balanceDue)+')':'')+'</option>'; }).join('');
+          var v=sel.value||keep; sel.innerHTML=h; if(v){ if(![].some.call(sel.options,function(o){ return o.value===v; })){ var o=document.createElement('option'); o.value=v; o.text=v; sel.appendChild(o); } sel.value=v; } };
+        inp.parentNode.replaceChild(sel,inp); fill(); if(cs) cs.addEventListener('change',function(){ keep=''; sel.value=''; fill(); }); } }
+    /* #62 payslip: the employee code follows the employee */
+    if(key==='payslips'){ var es=fv(host,'empName'), ec=fv(host,'empCode'); if(es&&ec){ var setc=function(force){ var e=(R.employees||[]).find(function(x){ return x&&x.name===es.value; }); if(e && e.code && (force||!ec.value)) ec.value=e.code; }; es.addEventListener('change',function(){ setc(true); }); setc(false); } }
+    /* #67 depreciation / amortization: picking the asset fills its rate */
+    if(key==='depreciation'||key==='amortization'){ var tb=host.querySelector('[data-line-items]'); if(tb) tb.addEventListener('change',function(e){ var s=e.target; if(!s||s.tagName!=='SELECT'||s.getAttribute('data-var')!=='asset') return;
+        var o=s.options[s.selectedIndex]; var tr=s.closest('tr'); var rate=o&&o.getAttribute('data-fadeprate'); var ri=tr&&tr.querySelector('[data-var="depRate"]');
+        if(ri && rate!=null && rate!==''){ ri.value=rate; try{ ri.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} } }); }
+    /* #70 bank reconciliation: book balance at the date and the difference to the statement */
+    if(key==='bankRec'){ var bs=fv(host,'bankName'), dt=fv(host,'date'), sb=fv(host,'statementBalance'); var box=warnBox(host,'brBook'); box.className='info-bar';
+      var upd=function(){ var bk=(R.bankCash||[]).find(function(x){ return x&&bs&&x.name===bs.value; }); if(!bk){ box.style.display='none'; return; }
+        var book=App.bankBookBalance(b,bk.name,dt?dt.value:''); var diff=Math.round((num(sb&&sb.value)-book)*100)/100; box.style.display='';
+        box.innerHTML='Book balance '+(dt&&dt.value?'at '+esc(App.fmtDate(dt.value)):'')+': <b>'+App.money(book)+'</b> · Statement: <b>'+App.money(num(sb&&sb.value))+'</b> · Difference: <b'+(Math.abs(diff)>0.005?' style="color:var(--danger,#b42318)"':'')+'>'+App.money(diff)+'</b> — '+(Math.abs(diff)<0.005?'Reconciled':'Not reconciled'); };
+      [bs,dt,sb].forEach(function(el){ if(el){ el.addEventListener('change',upd); el.addEventListener('input',upd); } }); upd(); }
+    /* #65 stock warnings: transfer / write-off quantity above what the location holds */
+    if(key==='invTransfers'||key==='invWriteOffs'||key==='production'){ var box2=warnBox(host,'qtyWarn'); var tb2=host.querySelector('[data-line-items]');
+      var chk=function(){ var loc=key==='invTransfers'&&fv(host,'fromLocation')?fv(host,'fromLocation').value:'Main location'; var msgs=[]; var need={};
+        if(tb2&&tb2.tBodies[0]) [].forEach.call(tb2.tBodies[0].rows,function(tr){ var it=tr.querySelector('[data-var="items"]'), q=tr.querySelector('[data-var="qty"]'); if(it&&it.value&&q) need[it.value]=(need[it.value]||0)+num(q.value); });
+        var self=App.editingId!=null?(R[key]||[]).find(function(x){ return x.id===App.editingId; }):null;
+        Object.keys(need).forEach(function(nm){ var have=invQtyAtLocation(b,nm,loc); if(self) (self.lines||[]).forEach(function(l){ if((l.item||l.items)===nm) have+= (key==='invTransfers'? num(l.qty) : num(l.qty)); });
+          if(need[nm]>have+1e-9) msgs.push(esc(nm)+': '+need[nm]+' requested, '+Math.round(have*1e6)/1e6+' at '+esc(loc||'Main location')); });
+        box2.style.display=msgs.length?'':'none'; box2.innerHTML=msgs.length?'Not enough stock — '+msgs.join('; '):''; };
+      host.addEventListener('change',chk); host.addEventListener('input',chk); chk(); }
+  };
+  App.bankBookBalance=function(b,bankName,to){ var n=GL.sysAcct(b,'cash & cash equivalents',false); if(!n) return 0; return GL.balance(b,n.id,{sub:bankName,to:to||null}); };
+  var _mount=App._mountDesignedForm; App._mountDesignedForm=function(key){ var r=_mount.apply(this,arguments); try{ App._enhanceDesigned(document.getElementById('deHost'),key); }catch(e){} return r; };
+
   /* reset the guard whenever a form is drawn */
   var _render=App.renderMain; App.renderMain=function(){ App._saveBlocked=null; return _render.apply(this,arguments); };
 
@@ -146,6 +189,17 @@
       (App.payerMatches(b).length?'<div class="form-actions"><button class="btn" onclick="App.openTool(\'matchPayers\')">Match receipts to customers…</button></div>':'')+
       '</div>'; };
 
+  /* customer / supplier view: what is outstanding or overpaid, from the same ledger as the list */
+  var _led=App.ledgerHtml; App.ledgerHtml=function(b){ var h=_led.apply(this,arguments); try{ var key=LABEL2KEY[this.wsSection]; if(key!=='customers'&&key!=='suppliers') return h;
+      var rec=(this.records(b)||[]).find(function(r){ return r.id===App.ledgerId; }); if(!rec) return h;
+      var bal=key==='customers'?customerBalance(b,rec.name):supplierBalance(b,rec.name); var st=partyStatus(bal);
+      var lbl=st==='Overpaid'?'Overpaid':(st==='Unpaid'?'Outstanding':'Paid'); var cls=st==='Overpaid'?'st-overpaid':(st==='Unpaid'?'st-unpaid':'st-paid');
+      var c=partyDocCounts(b,key==='customers'?'cust':'sup',rec.name);
+      var strip='<div class="party-bal" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)">'+
+        '<span><span style="color:var(--muted)">'+(key==='customers'?'Accounts receivable':'Accounts payable')+'</span> <b class="num">'+App.money(bal)+'</b></span>'+
+        '<span class="st-badge '+cls+'">'+lbl+(st==='Paid'?'':' '+App.money(Math.abs(bal)))+'</span>'+
+        '<span style="color:var(--muted)">'+(key==='customers'?'Sales invoices':'Purchase invoices')+': '+c.inv+' · '+(key==='customers'?'Receipts':'Payments')+': '+c.cash+'</span></div>';
+      var at=h.indexOf('<div id="ledgerBody">'); if(at>=0) h=h.slice(0,at)+strip+h.slice(at); }catch(e){} return h; };
   var _tools=App.toolsHtml; App.toolsHtml=function(b){ if(this.toolView==='dataCheck') return this.dataCheckHtml(b); if(this.toolView==='matchPayers') return this.matchPayersHtml(b); return _tools.apply(this,arguments); };
 
   /* entry points: a notice on Summary when the ledger needed Suspense, and on Receipts when payers can be matched */

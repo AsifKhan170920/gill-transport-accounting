@@ -527,7 +527,7 @@ const App = {
           const raw=col.calc?col.calc(r):r[col.key];
           if(col.kind==='money'){ const inner=col.ledger?'<a class="led-link" onclick="App.openLedger('+r.id+')">'+this.money(raw)+'</a>':this.money(raw); return '<td class="m '+(col.r?'r ':'')+(col.color||'')+' '+(col.bold?'bold':'')+'">'+inner+'</td>'; }
           if(col.kind==='date') return '<td class="'+(col.r?'r':'')+'">'+this.fmtDateUS(raw)+'</td>';
-          if(col.kind==='status'){ const s=raw||''; const cls=s==='Overdue'?'st-overdue':(s==='Paid'?'st-paid':(s==='Draft'?'st-draft':(s==='Partially paid'?'st-partial':'st-unpaid'))); return '<td>'+(s?'<span class="st-badge '+cls+'">'+this.esc(s)+'</span>':'')+'</td>'; }
+          if(col.kind==='status'){ const s=raw||''; const cls=s==='Overdue'?'st-overdue':(s==='Paid'?'st-paid':(s==='Draft'?'st-draft':(s==='Partially paid'?'st-partial':(s==='Overpaid'?'st-overpaid':'st-unpaid')))); return '<td>'+(s?'<span class="st-badge '+cls+'">'+this.esc(s)+'</span>':'')+'</td>'; }
           return '<td class="'+(col.r?'r':'')+'">'+(col.ledger?'<a class="led-link" onclick="App.openLedger('+r.id+')">'+this.esc(raw==null?'':raw)+'</a>':this.esc(raw==null?'':raw))+'</td>';
         }).join('')+'</tr>').join('');
     }

@@ -331,12 +331,14 @@
 
   /* ----------------------------------------------------------- option lists */
   function acctOpts(b){ var A=app(); var L=[]; try{ L=A.accountOptions(b); }catch(e){}
-    return L.filter(function(o){ var n=acctById(b,o.id); return !(n && n.cashControl); }).map(function(o){ return { v:o.id, l:o.label }; }); }
+    var used={}; ((TX&&TX.lines)||[]).forEach(function(l){ if(l&&l.account) used[l.account]=1; });
+    return L.filter(function(o){ var n=acctById(b,o.id); if(n && n.cashControl) return false; if(used[o.id]) return true; return !(A.lineAccountHidden && A.lineAccountHidden(b,o.id,TX&&TX.key)); }).map(function(o){ return { v:o.id, l:o.label }; }); }
   function bankOpts(b,cur){ return (((b.records||{}).bankCash)||[]).filter(function(r){ return r && r.name && (!r.inactive || r.name===cur); })
     .map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name }; }); }
   function partyOpts(b,list){ return (((b.records||{})[list])||[]).filter(function(r){ return r && r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name }; }); }
   function itemOpts(b){ var R=b.records||{};
-    return ((R.inventory||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name, g:'Inventory item' }; }))
+    var qoh=function(r){ try{ return G('invItemStats')(b,r).qtyOnHand; }catch(e){ return null; } };
+    return ((R.inventory||[]).filter(function(r){ return r&&r.name; }).map(function(r){ var q=qoh(r); return { v:r.name, s:(r.code?r.code+' - ':'')+r.name, l:(r.code?r.code+' - ':'')+r.name+(q!=null?'  —  Qty: '+q:''), g:'Inventory item' }; }))
       .concat((R.nonInvItems||[]).filter(function(r){ return r&&r.name; }).map(function(r){ return { v:r.name, l:(r.code?r.code+' - ':'')+r.name, g:'Non-inventory item' }; })); }
   function itemRec(b,name){ var R=b.records||{}; var i=(R.inventory||[]).filter(function(r){ return r&&r.name===name; })[0]; if(i) return { typ:'inv', rec:i };
     var n=(R.nonInvItems||[]).filter(function(r){ return r&&r.name===name; })[0]; return n ? { typ:'non', rec:n } : null; }
@@ -345,7 +347,7 @@
   function combo(value, opts, onPick, ph, cls, qc, extra){
     var id='cb'+(++cbSeq); CB[id]={ opts:opts, pick:onPick, qc:qc||'' };
     var o=opts.filter(function(x){ return String(x.v)===String(value); })[0];
-    var shown=o ? o.l : (!blank(value) ? value : (ph||''));
+    var shown=o ? (o.s||o.l) : (!blank(value) ? value : (ph||''));
     return '<div class="cb '+(cls||'')+'"'+(extra||'')+'><button type="button" class="cb-btn" data-cb="'+id+'" onclick="TxnForms._cbOpen(\''+id+'\',this)">'+
       '<span class="'+(o||!blank(value)?'':'ph')+'">'+esc(shown)+'</span>'+
       ((o||!blank(value)) ? '<i class="cb-x" title="Clear" onclick="TxnForms._cbPick(event,\''+id+'\',\'\')">×</i>' : '')+
