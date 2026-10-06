@@ -13,7 +13,7 @@ const App = {
     else{
       if(!biz.some(b=>b.id===1001)) biz.unshift(demoBusiness());
       biz.forEach(b=>{
-        if(!b.period) b.period={mode:'ytd',from:'2026-01-01',to:'2026-05-29',excludeZero:false,description:'Summary'};
+        if(!b.period) b.period=defaultPeriod();
         if(!b.balanceSheet||!b.profitLoss){ const es=emptySummary(); b.balanceSheet=b.balanceSheet||es.balanceSheet; b.profitLoss=b.profitLoss||es.profitLoss; }
         if(!b.records) b.records={};
         if(b.id===1001 && (!b.records.bankCash)) b.records=seedDemoRecords();
@@ -198,7 +198,7 @@ const App = {
     const country=document.getElementById('newBizCountry').value||'Automatic';
     const biz=DB.get(DB.k.biz,[]); const es=emptySummary();
     const nb={id:Date.now(),name,country,created:new Date().toISOString(),
-      period:{mode:'ytd',from:'2026-01-01',to:'2026-05-29',excludeZero:false,description:'Summary'},
+      period:defaultPeriod(),
       records:{}, balanceSheet:es.balanceSheet, profitLoss:es.profitLoss};
     ensureSettings(nb); ensureCoa(nb); refreshSummary(nb); biz.push(nb);
     DB.set(DB.k.biz,biz); this.go('businesses');
@@ -527,7 +527,7 @@ const App = {
           const raw=col.calc?col.calc(r):r[col.key];
           if(col.kind==='money'){ const inner=col.ledger?'<a class="led-link" onclick="App.openLedger('+r.id+')">'+this.money(raw)+'</a>':this.money(raw); return '<td class="m '+(col.r?'r ':'')+(col.color||'')+' '+(col.bold?'bold':'')+'">'+inner+'</td>'; }
           if(col.kind==='date') return '<td class="'+(col.r?'r':'')+'">'+this.fmtDateUS(raw)+'</td>';
-          if(col.kind==='status'){ const s=raw||''; const cls=s==='Overdue'?'st-overdue':(s==='Paid'?'st-paid':(s==='Draft'?'st-draft':(s==='Partially paid'?'st-partial':'st-unpaid'))); return '<td>'+(s?'<span class="st-badge '+cls+'">'+this.esc(s)+'</span>':'')+'</td>'; }
+          if(col.kind==='status'){ const s=raw||''; const cls=s==='Overdue'?'st-overdue':(s==='Paid'?'st-paid':(s==='Draft'?'st-draft':(s==='Partially paid'?'st-partial':(s==='Overpaid'?'st-overpaid':'st-unpaid')))); return '<td>'+(s?'<span class="st-badge '+cls+'">'+this.esc(s)+'</span>':'')+'</td>'; }
           return '<td class="'+(col.r?'r':'')+'">'+(col.ledger?'<a class="led-link" onclick="App.openLedger('+r.id+')">'+this.esc(raw==null?'':raw)+'</a>':this.esc(raw==null?'':raw))+'</td>';
         }).join('')+'</tr>').join('');
     }
@@ -1465,7 +1465,8 @@ const App = {
     this.recReturn=this._snapNav(); this.ledgerReturn={section:this.wsSection,id:this.ledgerId}; this.wsSection=label; this.editingId=id; this.wsMode=(mode==='edit'?'form':'view'); this.listQuery=''; this.renderWorkspace(); },
   backFromRecord(){ if(this.recReturn){ var s=this.recReturn; this.recReturn=null; this.ledgerReturn=null; this.editingId=null; this._restoreNav(s); return true; } if(this.ledgerReturn){ const r=this.ledgerReturn; this.ledgerReturn=null; this.wsSection=r.section; this.ledgerId=r.id; this.editingId=null; this.wsMode='ledger'; this.renderWorkspace(); return true; } return false; },
   gotoRecord(src,id){ const label=Object.keys(LABEL2KEY).find(l=>LABEL2KEY[l]===src); if(!label) return; this.wsSection=label; this.editingId=id; this.wsMode='view'; this.listQuery=''; this.renderWorkspace(); },
-  ledgerEntries(b,key,rec){ const R=b.records||{}; const e=[]; const name=rec&&rec.name;
+  ledgerEntries(b,key,rec){ const _gl=(typeof GL!=='undefined')?GL.partyEntries(b,key,rec):null; if(_gl) return _gl;   /* the general ledger is the one source */
+    const R=b.records||{}; const e=[]; const name=rec&&rec.name;
     const cashHits=(recsKey,re,asDebit,label)=>{ (R[recsKey]||[]).forEach(r=>{ const lns=(r.lines&&r.lines.length)?r.lines:[{account:r.account,sub:r.sub,amount:r.amount}];
       let amt=0,hit=false; lns.forEach(ln=>{ if(acctNameMatches(b,ln.account,re)&&ln.sub===name){ amt+=Number(ln.amount)||0; hit=true; } });
       if(hit){ const nm=(recsKey==='receipts'?r.paidBy:r.payee); e.push({date:r.date,ref:r.reference,type:label+(nm&&nm!==name?' — '+nm:''),debit:asDebit?amt:0,credit:asDebit?0:amt,src:recsKey,id:r.id}); } }); };
@@ -1809,7 +1810,7 @@ const App = {
   _repDate(s){ return this.fmtDateUS(s); },
   _newReportId(){ return 'r'+Date.now()+Math.floor(Math.random()*1000); },
   _getInst(b,key,id){ var list=(b.reports&&b.reports[key])||[]; return list.find(function(r){ return String(r.id)===String(id); }); },
-  _defaultInst(b,key){ var p=b.period||{}; return { id:this._newReportId(), title:(this._REPDEF[key]||{}).name||'Report', desc:'', from:p.from||'2025-01-01', to:p.to||'2025-12-31', colName:'Total', method:'Accrual basis', rounding:'Off', collapse:'', footer:'', showCodes:false, excludeZero:false, customTheme:false }; },
+  _defaultInst(b,key){ var p=periodOf(b); return { id:this._newReportId(), title:(this._REPDEF[key]||{}).name||'Report', desc:'', from:p.from||'2025-01-01', to:p.to||'2025-12-31', colName:'Total', method:'Accrual basis', rounding:'Off', collapse:'', footer:'', showCodes:false, excludeZero:false, customTheme:false }; },
   _ensureReports(b,key){ b.reports=b.reports||{}; if(!b.reports[key]||!b.reports[key].length){ b.reports[key]=[this._defaultInst(b,key)]; this.saveBiz(b); } return b.reports[key]; },
   _repCrumb(key, leaf){ var name=(this._REPDEF[key]||{}).name||key; return '<div class="ws-crumb"><div class="left">'+App._crumbIco()+' ▸ <a class="led-link" onclick="App.reportsBack()">Reports</a> ▸ <a class="led-link" onclick="App.openReport(\''+key+'\')">'+this.esc(name)+'</a>'+(leaf?' ▸ '+this.esc(leaf):'')+'</div></div>'; },
   reportNew(key){ var b=this.curBiz(); b.reports=b.reports||{}; b.reports[key]=b.reports[key]||[]; var inst=this._defaultInst(b,key); b.reports[key].push(inst); this.saveBiz(b); this.repView=key; this.repMode='edit'; this.repInst=inst.id; this.renderMain(b); },
@@ -1947,7 +1948,8 @@ const App = {
     var eBase=0, realKids=[]; (eq.children||[]).forEach(function(k){ if(k.id!=null){ eBase+=(k.amt||0); realKids.push(k); } });
     var plug=(assets.total||0)-(liab.total||0)-eBase-plNet; var eChildren=realKids.slice();
     if(Math.abs(plNet)>0.0049) eChildren.push({name:'Net profit (loss)',amt:plNet});
-    if(Math.abs(plug)>0.0049) eChildren.push({name:'Starting balance equity',amt:plug});
+    /* the ledger balances, so what is left is the profit of periods before the report starts: it is retained earnings */
+    if(Math.abs(plug)>0.0049){ var re=eChildren.find(function(k){ return /retained earnings/i.test(k.name||''); }); if(re) re.amt=(re.amt||0)+plug; else eChildren.push({name:'Retained earnings',amt:plug}); }
     eq.children=eChildren; eq.total=eBase+plNet+plug; return bs; },
   _stmtArrays(sections, kind){ var rows=[], amts=[]; var net=0;
     var emit=function(node,depth){ if(node.children&&node.children.length){ rows.push({t:'sub',label:node.name,depth:depth}); amts.push(node.total||0); node.children.forEach(function(c){ emit(c,depth+1); }); } else { rows.push({t:'leaf',label:node.name,depth:depth}); amts.push(node.amt||0); } };
@@ -2620,15 +2622,11 @@ const App = {
     '<div class="card" style="max-width:820px"><div style="text-align:center;margin-bottom:14px"><div style="font-weight:700;font-size:16px">'+this.esc(b.name)+'</div>'+
     '<div style="font-size:15px;margin-top:2px">'+this.esc(title)+'</div><div style="color:#999;font-size:12px">As at '+this.esc(this.fmtNow?this.fmtNow():new Date().toLocaleDateString())+'</div></div>'; },
   repFoot(){ if(this._repCtx){ var f=(this._repCtx.inst&&this._repCtx.inst.footer)?'<div style="margin-top:14px;white-space:pre-wrap;color:#444;font-size:12.5px">'+this.esc(this._repCtx.inst.footer)+'</div>':''; return f+'</div>'; } return '<div class="form-actions"><button class="btn" onclick="App.reportsBack()">Back to Reports</button></div></div>'; },
-  trialBalance(b){ const mov=accountMovements(b); const rank={assets:0,liabilities:1,equity:2,income:3,expense:4};
-    const rows=[]; let dr=0,cr=0;
-    (b.coa||[]).filter(n=>n.type==='account').forEach(n=>{ const L=liveBalance(b,n,mov); if(Math.abs(L)<0.005) return;
-      const nat=acctNature(b,n); let d=0,c=0; if(nat==='D'){ if(L>=0) d=L; else c=-L; } else { if(L>=0) c=L; else d=-L; }
-      dr+=d; cr+=c; rows.push({r:rank[acctRoot(b,n)]||0,name:acctPath(b,n),code:n.code||'',debit:d,credit:c}); });
-    rows.sort((a,b)=>a.r-b.r || a.name.localeCompare(b.name));
-    const S=summaryFromCoa(b); const sbe=(S.balanceSheet[2].children.find(c=>c.name==='Starting balance equity')||{}).amt||0;
-    if(Math.abs(sbe)>0.005){ if(sbe>=0){ rows.push({r:2,name:'Starting balance equity',code:'',debit:0,credit:sbe}); cr+=sbe; } else { rows.push({r:2,name:'Starting balance equity',code:'',debit:-sbe,credit:0}); dr+=-sbe; } }
-    return {rows,dr,cr}; },
+  /* Trial balance straight from the general ledger: Dr = Cr by construction. */
+  trialBalance(b,to){ const rank={assets:0,liabilities:1,equity:2,income:3,expense:4};
+    const tb=GL.trial(b,{to:to||null}); const rows=tb.rows.map(r=>{ const n=acctById(b,r.id); return {r:rank[r.root]||0,name:n?acctPath(b,n):r.name,code:r.code,debit:r.debit,credit:r.credit}; });
+    rows.sort((x,y)=>x.r-y.r || x.name.localeCompare(y.name));
+    return {rows,dr:tb.debit,cr:tb.credit}; },
   trialBalanceHtml(b){ const tb=this.trialBalance(b);
     const body=tb.rows.map(r=>'<tr><td>'+this.esc(r.name)+(r.code?' <span style="color:#bbb">('+this.esc(r.code)+')</span>':'')+'</td>'+
       '<td class="r m">'+(r.debit?this.money(r.debit):'')+'</td><td class="r m">'+(r.credit?this.money(r.credit):'')+'</td></tr>').join('')||
@@ -4320,7 +4318,7 @@ const App = {
      dashboard can never disagree with the Balance Sheet underneath it.
      Charts are drawn as inline SVG; there is no chart library to load.
      =================================================================== */
-  dashPeriod(b){ const p=(b&&b.period)||{};
+  dashPeriod(b){ const p=periodOf(b);
     if(p.from&&p.to) return {from:p.from,to:p.to};
     const to=new Date().toISOString().slice(0,10);
     return {from:this._isoShift(to,0,-11)||'',to:to}; },
@@ -4609,8 +4607,11 @@ const App = {
   dashRange(n){ this._dashRange=n; this.renderMain(this.curBiz()); },
 
   summaryHtml(b){
-    const p=b.period||{}; const periodTxt=p.from&&p.to?('For the period '+this.fmtDate(p.from)+' – '+this.fmtDate(p.to)):'';
-    const S=summaryFromCoa(b); const totals=this.coaRunningTotals(b); const BS=['assets','liabilities','equity'];
+    const p=periodOf(b); const periodTxt=p.from&&p.to?('For the period '+this.fmtDate(p.from)+' – '+this.fmtDate(p.to)):'';
+    /* balance sheet as at the period end, profit and loss for the period — the same ledger the reports read */
+    const S=summaryFromCoa(b,{from:p.from,to:p.to}); const totals={};
+    { let acc=0; const sec={assets:0,liabilities:1,equity:2}; (b.coaTop&&b.coaTop.bs||['assets','liabilities','equity']).forEach(id=>{ if(sec[id]!=null) acc+=(S.balanceSheet[sec[id]]||{}).total||0; else totals[id]=acc; }); }
+    { let acc=0,gi=0; (b.coaTop&&b.coaTop.pl||[]).forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const g=S.profitLoss[gi++]; if(g) acc+=(g.plkind==='expense'?-1:1)*(g.total||0); } else if(n.type==='total') totals[id]=acc; }); } const BS=['assets','liabilities','equity'];
     const bsMap={assets:S.balanceSheet[0],liabilities:S.balanceSheet[1],equity:S.balanceSheet[2]};
     let bsOut=''; (b.coaTop&&b.coaTop.bs||BS).forEach(id=>{ if(bsMap[id]) bsOut+=this.sectionHtml(bsMap[id]); else { const n=(b.coa||[]).find(x=>x.id===id); if(n&&n.type==='total') bsOut+=this.totalLineHtml(n.name,totals[id]||0); } });
     let plOut='',gi=0; (b.coaTop&&b.coaTop.pl||[]).forEach(id=>{ const n=(b.coa||[]).find(x=>x.id===id); if(!n) return; if(n.type==='group'){ const sec=S.profitLoss[gi++]; if(sec) plOut+=this.sectionHtml(sec); } else if(n.type==='total') plOut+=this.totalLineHtml(n.name,totals[id]||0); });
@@ -4626,7 +4627,7 @@ const App = {
   /* The Dashboard tab: the same cards, charts and panels that used to sit on top
      of the Summary, on a page of their own. */
   dashboardPageHtml(b){
-    const p=b.period||{}; const periodTxt=p.from&&p.to?('For the period '+this.fmtDate(p.from)+' – '+this.fmtDate(p.to)):'';
+    const p=periodOf(b); const periodTxt=p.from&&p.to?('For the period '+this.fmtDate(p.from)+' – '+this.fmtDate(p.to)):'';
     let dash=''; try{ dash=this.dashboardHtml(b); }catch(e){ dash=''; }
     return this.crumb('Dashboard')+
       '<div class="ws-tabrow"><span class="ws-tab active">Dashboard</span><button class="btn btn-sm" onclick="App.editSummary()">Edit period</button></div>'+
@@ -4646,7 +4647,7 @@ const App = {
   editSummary(){ this._periodReturn=(this.wsMode==='dashboard')?'dashboard':'summary';
     this.wsMode='summaryEdit'; this.renderMain(this.curBiz()); },
   periodFormHtml(b){
-    const p=b.period||{mode:'ytd',from:'2026-01-01',to:'2026-05-29',excludeZero:false,description:'Summary'};
+    const p=periodOf(b);
     const opt=(v,l)=>'<option value="'+v+'"'+(p.mode===v?' selected':'')+'>'+l+'</option>'; const custom=p.mode==='custom';
     return '<div class="ws-crumb"><div class="left">'+App._crumbIco()+' ▸ Summary ▸ Edit</div></div>'+
       '<div class="card"><h2>Summary</h2><p class="sub">Set the period shown on the Summary page.</p>'+
@@ -4658,7 +4659,7 @@ const App = {
       '<label class="chk"><input id="edZero" type="checkbox"'+(p.excludeZero?' checked':'')+'> Exclude accounts with zero balance</label>'+
       '<div class="form-actions"><button class="btn btn-primary" onclick="App.savePeriod()">Update</button><button class="btn" onclick="App.cancelEdit()">Cancel</button></div></div>';
   },
-  presetDates(mode){ return ({thisMonth:['2026-05-01','2026-05-31'],thisQuarter:['2026-04-01','2026-06-30'],thisYear:['2026-01-01','2026-12-31'],ytd:['2026-01-01','2026-05-29']})[mode]||null; },
+  presetDates(mode){ return presetPeriod(mode); },
   onModeChange(){ const mode=document.getElementById('edMode').value, f=document.getElementById('edFrom'), t=document.getElementById('edTo');
     if(mode==='custom'){ f.disabled=false; t.disabled=false; } else { const d=this.presetDates(mode); if(d){ f.value=d[0]; t.value=d[1]; } f.disabled=true; t.disabled=true; } },
   savePeriod(){ const b=this.curBiz(); if(!b) return; const mode=document.getElementById('edMode').value;

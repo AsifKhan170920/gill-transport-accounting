@@ -96,7 +96,7 @@ export function loadApp({ storage = {} } = {}) {
   // The files must run as one script: they reference each other's top-level
   // bindings, and `const App = …` / `const DB = …` are lexical, so they are not
   // reachable as globals until we publish them explicitly at the end.
-  const FILES = ['js/data.js', 'js/accounting.js', 'js/app.js', 'js/users.js'];
+  const FILES = ['js/data.js', 'js/accounting.js', 'js/ledger-engine.js', 'js/app.js', 'js/users.js', 'js/data-tools.js'];
   const EXPORTS = ['App', 'DB', 'SIDEBAR', 'SIDEBAR_FOOT', 'SIDEBAR_GROUPS', 'LABEL2KEY', 'KEY2LABEL', 'REG', 'CUR'];
   const source =
     FILES.map((f) => `/* ==== ${f} ==== */\n` + readFileSync(join(ROOT, f), 'utf8')).join('\n;\n') +
