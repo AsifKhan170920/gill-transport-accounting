@@ -955,7 +955,7 @@ const App = {
      wins over Partially paid — being past due is a fact about the date, and the
      ageing reports read this status. */
   invStatus(r){ if(r.statusOverride) return r.statusOverride;
-    const tot=Number(r.total)||0; const bal=Number(r.balanceDue!=null?r.balanceDue:tot)||0;
+    const tot=(Number(r.total)||0)-(r.withholding?(Number(r.withholdingAmt||r.whtAmount)||0):0);   /* withholding is not owed by the customer */ const bal=Number(r.balanceDue!=null?r.balanceDue:tot)||0;
     if(bal<=0.005) return 'Paid';
     if(r.dueDate){ const due=new Date(r.dueDate); const today=new Date(); today.setHours(0,0,0,0); if(due<today) return 'Overdue'; }
     if(tot>0.005 && bal<tot-0.005) return 'Partially paid';

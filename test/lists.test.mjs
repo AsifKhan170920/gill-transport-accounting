@@ -279,7 +279,7 @@ describe('bulk delete and Batch Update', () => {
     ctx.UIModal.confirm = (t) => { asked = t; return Promise.resolve(true); };
     App.batchMode = true; App.batchSel = { 1: 1, 2: 1, 3: 1 };
     await App.batchDeleteRun();
-    assert.equal(asked, 'Delete 3 records? This cannot be undone.');
+    assert.equal(asked, 'Delete 3 selected records?\n\nThis can be undone from History.');   /* History restores a batch delete */
     assert.deepEqual(b().records.receipts.map((r) => r.id), [4]);
     assert.equal(App.batchMode, false);
   });
