@@ -72,3 +72,5 @@ body.theme-dark #deHost .app-form .li-add{background:var(--surface);color:var(--
 body.theme-dark #deHost .app-form .print-opts{background:var(--surface-2);border-color:var(--line)}
 body.theme-dark #deHost .app-form .print-opts .po-h,body.theme-dark #deHost .app-form .print-opts .po-item{color:var(--ink-2)}
 body.theme-dark #deHost .app-form .input-prefix>span{background:var(--surface-3);color:var(--ink-2);border-color:var(--field-line)}
+#deHost .ff-opts{margin:8px 2px 4px}
+#deHost .ff-opts .ff-chk{margin:4px 0;font-size:13px}

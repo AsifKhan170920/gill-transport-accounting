@@ -293,6 +293,23 @@
     var set={}; off.forEach(function(v){ set[v]=1; });
     form.querySelectorAll('[data-print-target]').forEach(function(cb){ var v=printKeyVar(form,cb.getAttribute('data-print-target')); var want=!set[v]; if(cb.checked!==want){ cb.checked=want; fire(cb,'change'); } }); }
 
+  /** Column — Qty on designed forms: off hides the column and every line counts as 1 (saved as colQty:false). */
+  function qtyToggle(host,src){
+    var tbl=host.querySelector('[data-line-items]'); if(!tbl || host.querySelector('[data-ff-qty]')) return;
+    var q=tbl.querySelector('tbody [data-var="qty"]'); if(!q) return; var cell=q.closest('td'); var pk=cell&&cell.getAttribute('data-print-key'); if(!pk) return;
+    if(!tbl.querySelector('[data-var="price"]')) return;
+    var wrap=tbl.closest('.li-wrap')||tbl; var box=doc().createElement('div'); box.className='ff-opts'; box.setAttribute('data-noprint','');
+    box.innerHTML='<label class="ff-chk"><input type="checkbox" data-ff-qty checked> Column — Qty</label>';
+    wrap.parentNode.insertBefore(box,wrap.nextSibling);
+    var cb=box.querySelector('input'), st=doc().createElement('style'); host.appendChild(st);
+    var fill=function(row){ var i=row&&row.querySelector('[data-var="qty"]'); if(i && blank(i.value)){ i.value='1'; } };
+    var apply=function(){ var off=!cb.checked; st.textContent=off?('#deHost [data-print-key="'+pk+'"]{display:none !important}'):'';
+      if(off) Array.prototype.forEach.call(tbl.tBodies[0].rows,function(r){ fill(r); var p=r.querySelector('[data-var]'); if(p) fire(p,'input'); }); };
+    tbl.addEventListener('input',function(e){ if(!cb.checked){ fill(e.target.closest && e.target.closest('tr')); } },true);
+    /* switching it off by hand folds each line's qty into its price, so the amounts stay the same */
+    cb.addEventListener('change',function(){ if(!cb.checked) Array.prototype.forEach.call(tbl.tBodies[0].rows,function(r){ var qi=r.querySelector('[data-var="qty"]'), pi=r.querySelector('[data-var="price"]'); if(!qi||!pi||blank(qi.value)||blank(pi.value)) return; var qv=num(qi.value); if(qv===1) return; pi.value=String(Math.round(qv*num(pi.value)*100)/100); qi.value='1'; }); apply(); });
+    if(src && src.colQty===false){ cb.checked=false; apply(); }
+  }
   function afterMount(key,prefill){
     var A=app(), b=A.curBiz(), host=doc().getElementById('deHost'); if(!host || !b) return;
     var form=host.querySelector('.app-form'); if(form) form.classList.add('ff-form');
@@ -300,6 +317,7 @@
     /* new documents open on today's date (Inter Account Transfer and every other designed form) */
     if(A.editingId==null){ host.querySelectorAll('input[type="date"][data-field-var="date"]').forEach(function(d){ if(blank(d.value)){ d.value=today(); fire(d,'input'); fire(d,'change'); } }); }
     enhanceLines(host,key,b);
+    qtyToggle(host, rec || prefill || null);
     if(key==='inventory') enhanceInventory(host,b,rec);
     var src=rec || prefill || null;
     if(src && Array.isArray(src.printOff)) applyPrintOff(host,src.printOff);
@@ -408,12 +426,13 @@
       return d; });
     /* save: print options travel with the record; nothing the form does not show is lost on Update */
     wrap('saveDesignedRecord',function(orig,args){ var key=args[0], host=doc().getElementById('deHost');
-      this._ffSave={ key:key, before:(this.editingId!=null)?JSON.parse(JSON.stringify(((this.records(this.curBiz())||[]).filter(function(r){ return r.id===App.editingId; })[0])||null)):null, printOff:host?readPrintOff(host):null };
+      this._ffSave={ key:key, before:(this.editingId!=null)?JSON.parse(JSON.stringify(((this.records(this.curBiz())||[]).filter(function(r){ return r.id===App.editingId; })[0])||null)):null, printOff:host?readPrintOff(host):null, qtyOff:!!(host && host.querySelector('[data-ff-qty]') && !host.querySelector('[data-ff-qty]').checked), hasQty:!!(host && host.querySelector('[data-ff-qty]')) };
       try{ return orig.apply(this,args); } finally { this._ffSave=null; } });
     wrap('_applyDesignedToNative',function(orig,args){ var key=args[0], rec=args[1]; var r=orig.apply(this,args); var S=this._ffSave;
       if(key==='employees'){ if(blank(rec.email) && !blank(rec.empEmail)) rec.email=rec.empEmail; }
       if(rec && S && S.key===key){
         if(S.printOff) rec.printOff=S.printOff;
+        if(S.hasQty) rec.colQty=!S.qtyOff;
         var before=S.before; if(before){ Object.keys(before).forEach(function(k){ if(!(k in rec)) rec[k]=before[k]; });
           /* the document keeps its identity: allocations and history point at its uuid */
           if(before.uuid) rec.uuid=before.uuid; }
