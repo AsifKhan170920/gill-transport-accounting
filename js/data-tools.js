@@ -92,7 +92,7 @@
 
   /* ---------------- designed forms: small behaviours the templates lack ---------------- */
   function fv(host,k){ return host.querySelector('[data-field-var="'+k+'"]'); }
-  function warnBox(host,id){ var w=host.querySelector('#'+id); if(!w){ w=document.createElement('div'); w.id=id; w.className='info-bar data-guard'; w.style.display='none'; host.appendChild(w); } return w; }
+  function warnBox(host,id){ var w=host.querySelector('#'+id); if(!w){ w=document.createElement('div'); w.id=id; w.className='info-bar qty-warn'; w.style.display='none'; host.appendChild(w); } return w; }
   App._enhanceDesigned=function(host,key){ var b=App.curBiz(); if(!b||!host) return; var R=b.records||{};
     /* #69 withholding tax receipt: the sales invoice is picked from that customer's invoices */
     if(key==='whtReceipts'){ var inp=fv(host,'invoice'), cs=fv(host,'custName'); if(inp && inp.tagName!=='SELECT'){

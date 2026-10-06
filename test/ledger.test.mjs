@@ -236,3 +236,17 @@ describe('data check', { skip: !BACKUP && 'backup file not found' }, () => {
     assert.match(html, /Data check/);
   });
 });
+
+describe('every TEST receipt, payment and sales invoice reopens with its own total', { skip: !BACKUP && 'backup file not found' }, () => {
+  const { ctx, b } = open(TEST_ID);
+  for (const key of ['receipts', 'payments', 'salesInv']) {
+    test(key, () => {
+      b.records[key].forEach((r) => {
+        const t = ctx.TxnForms.start(b, key, r, 'edit');
+        near(ctx.TxnForms.totals(b, t).total, Number(key === 'salesInv' ? r.total : r.amount), key + ' ' + r.reference);
+        assert.ok(t.lines.every((l, i) => !r.lines[i] || l.account === r.lines[i].account), 'accounts load');
+        assert.ok(!t.loadBlocked);
+      });
+    });
+  }
+});
